@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+jinja2
+numpy
+pillow
+zarr
+numcodecs
+python-multipart
+tifffile
+imagecodecs

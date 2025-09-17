@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Neuroglancer PNG Chunk Demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin: 20px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+
+    th {
+      background: #f8f8f8;
+      text-align: left;
+    }
+
+    .ok {
+      color: #1a7f37;
+    }
+
+    .ng {
+      color: #b42318;
+    }
+
+    .small {
+      color: #666;
+      font-size: 12px;
+    }
+
+    .rowok {
+      background: #f6ffed;
+    }
+
+    .rowng {
+      background: #fff1f0;
+    }
+
+    #controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    input[type="number"] {
+      width: 90px;
+    }
+
+    .upload-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #dee2e6;
+    }
+
+    .upload-section h3 {
+      margin-top: 0;
+      color: #495057;
+    }
+
+    .file-input {
+      margin: 10px 0;
+    }
+
+    .upload-btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .upload-btn:hover {
+      background: #0056b3;
+    }
+
+    .upload-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .volumes-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #dee2e6;
+    }
+
+    .volume-item {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 4px;
+      border: 1px solid #dee2e6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .volume-info {
+      flex-grow: 1;
+    }
+
+    .volume-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: #007bff;
+      color: white;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+
+    .btn:hover {
+      opacity: 0.8;
+    }
+
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 4px;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Neuroglancer PNG Chunk Demo</h1>
+  <p class="small">
+    이미지를 업로드하면 자동으로 청크로 변환되어 Neuroglancer에서 볼 수 있습니다.
+  </p>
+
+  <!-- 파일 업로드 섹션 -->
+  <div class="upload-section">
+    <h3>📁 이미지 업로드</h3>
+    <p class="small">PNG, JPG, TIFF 형식의 이미지를 업로드하면 자동으로 Neuroglancer 호환 청크로 변환됩니다.</p>
+
+    <div class="file-input">
+      <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.tiff,.tif" />
+    </div>
+
+    <button id="uploadBtn" class="upload-btn" disabled>업로드 및 청크 변환</button>
+
+    <div id="uploadStatus"></div>
+  </div>
+
+  <!-- 볼륨 목록 섹션 -->
+  <div class="volumes-section">
+    <h3>📊 사용 가능한 볼륨</h3>
+    <button id="refreshBtn" class="btn btn-primary">새로고침</button>
+    <div id="volumesList"></div>
+  </div>
+
+  <!-- 기존 타일 테스트 섹션 -->
+  <div class="volumes-section">
+    <h3>🧪 타일 테스트</h3>
+    <p class="small">기존 볼륨의 타일을 테스트합니다.</p>
+
+    <div id="controls">
+      <label>볼륨 선택:
+        <select id="volumeSelect">
+          <option value="">볼륨을 선택하세요</option>
+        </select>
+      </label>
+      <label>Level key:
+        <input id="level" type="text" value="0" />
+      </label>
+      <label>Fetch count (tiles):
+        <input id="count" type="number" value="8" min="1" />
+      </label>
+      <button id="startBtn">Fetch tiles</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>URL</th>
+          <th>Status</th>
+          <th>Bytes</th>
+          <th>Time (ms)</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // 파일 업로드 관련
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const volumesList = document.getElementById('volumesList');
+    const volumeSelect = document.getElementById('volumeSelect');
+
+    // 파일 선택 시 업로드 버튼 활성화
+    fileInput.addEventListener('change', () => {
+      uploadBtn.disabled = !fileInput.files.length;
+    });
+
+    // 파일 업로드
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      uploadBtn.disabled = true;
+      uploadStatus.innerHTML = '<div class="status info">업로드 중...</div>';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          uploadStatus.innerHTML = `<div class="status success">${result.message}</div>`;
+          fileInput.value = '';
+          uploadBtn.disabled = true;
+          // 볼륨 목록 새로고침
+          loadVolumes();
+        } else {
+          uploadStatus.innerHTML = `<div class="status error">에러: ${result.detail}</div>`;
+        }
+      } catch (error) {
+        uploadStatus.innerHTML = `<div class="status error">업로드 실패: ${error.message}</div>`;
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    });
+
+    // 볼륨 목록 로드
+    async function loadVolumes() {
+      try {
+        const response = await fetch('/api/volumes');
+        const result = await response.json();
+
+        if (response.ok) {
+          displayVolumes(result.volumes);
+          updateVolumeSelect(result.volumes);
+        }
+      } catch (error) {
+        console.error('볼륨 목록 로드 실패:', error);
+      }
+    }
+
+    // 볼륨 목록 표시
+    function displayVolumes(volumes) {
+      if (volumes.length === 0) {
+        volumesList.innerHTML = '<p class="small">사용 가능한 볼륨이 없습니다.</p>';
+        return;
+      }
+
+      volumesList.innerHTML = volumes.map(volume => `
+        <div class="volume-item">
+          <div class="volume-info">
+            <strong>${volume.name}</strong>
+            <br><span class="small">경로: ${volume.path}</span>
+          </div>
+          <div class="volume-actions">
+            <a href="${volume.info_url}" target="_blank" class="btn btn-primary">Info</a>
+            <a href="https://neuroglancer-demo.appspot.com/#!{'layers':[{'type':'image','source':'precomputed://http://localhost:8000${volume.path}','blend':'additive'}]}" 
+               target="_blank" class="btn btn-success">Neuroglancer</a>
+            <button onclick="deleteVolume('${volume.name}')" class="btn btn-danger">삭제</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 볼륨 선택 드롭다운 업데이트
+    function updateVolumeSelect(volumes) {
+      volumeSelect.innerHTML = '<option value="">볼륨을 선택하세요</option>' +
+        volumes.map(volume => `<option value="${volume.name}">${volume.name}</option>`).join('');
+    }
+
+    // 볼륨 삭제
+    async function deleteVolume(volumeName) {
+      if (!confirm(`볼륨 '${volumeName}'을 삭제하시겠습니까?`)) return;
+
+      try {
+        const response = await fetch(`/api/volumes/${volumeName}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert(result.message);
+          loadVolumes();
+        } else {
+          alert(`삭제 실패: ${result.detail}`);
+        }
+      } catch (error) {
+        alert(`삭제 실패: ${error.message}`);
+      }
+    }
+
+    // 새로고침 버튼
+    refreshBtn.addEventListener('click', loadVolumes);
+
+    // 페이지 로드 시 볼륨 목록 로드
+    loadVolumes();
+
+    // 기존 타일 테스트 코드 (수정됨)
+    // CloudVolume이 생성하는 실제 파일명 형식: x_start-x_end_y_start-y_end_z_start-z_end
+    let volumeInfo = null;
+
+    async function loadVolumeInfo(volumeName) {
+      try {
+        const response = await fetch(`/api/volumes/${volumeName}/info`);
+        if (response.ok) {
+          const result = await response.json();
+          volumeInfo = result.info;
+          return result.info;
+        }
+      } catch (error) {
+        console.error('볼륨 정보 로드 실패:', error);
+      }
+      return null;
+    }
+
+    const TILE_PATTERN = (volume, lvl, x, y, z = 0) => {
+      if (!volumeInfo || !volumeInfo.scales || volumeInfo.scales.length === 0) {
+        return `/precomp/${volume}/${lvl}/${x}-${y}-${z}.png`; // fallback
+      }
+
+      const scale = volumeInfo.scales[0]; // 첫 번째 스케일 사용
+      const chunkSize = scale.chunk_sizes[0][0]; // 첫 번째 청크 크기
+      const volumeSize = scale.size;
+
+      const xStart = x * chunkSize;
+      const xEnd = Math.min((x + 1) * chunkSize, volumeSize[0]);
+      const yStart = y * chunkSize;
+      const yEnd = Math.min((y + 1) * chunkSize, volumeSize[1]);
+
+      return `/precomp/${volume}/${lvl}/${xStart}-${xEnd}_${yStart}-${yEnd}_${z}-${z + 1}`;
+    };
+
+    async function fetchTile(url, idx) {
+      const t0 = performance.now();
+      try {
+        const resp = await fetch(url);
+        const buf = await resp.arrayBuffer();
+        const t1 = performance.now();
+        return {
+          ok: resp.ok,
+          status: resp.status,
+          bytes: buf.byteLength,
+          ms: Math.round(t1 - t0),
+          url,
+          idx
+        };
+      } catch (e) {
+        const t1 = performance.now();
+        return { ok: false, status: "ERR", bytes: 0, ms: Math.round(t1 - t0), url, idx };
+      }
+    }
+
+    function renderRow(res) {
+      const tr = document.createElement("tr");
+      tr.className = res.ok ? "rowok" : "rowng";
+      tr.innerHTML = `
+        <td>${res.idx + 1}</td>
+        <td class="small"><code>${res.url}</code></td>
+        <td>${res.ok ? `<span class="ok">${res.status}</span>` : `<span class="ng">${res.status}</span>`}</td>
+        <td>${res.bytes}</td>
+        <td>${res.ms}</td>
+      `;
+      document.getElementById("tbody").appendChild(tr);
+    }
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      const volume = document.getElementById("volumeSelect").value;
+      if (!volume) {
+        alert('볼륨을 선택해주세요.');
+        return;
+      }
+
+      // 볼륨 정보 로드
+      await loadVolumeInfo(volume);
+
+      const level = document.getElementById("level").value.trim();
+      const count = parseInt(document.getElementById("count").value, 10);
+      document.getElementById("tbody").innerHTML = "";
+
+      // (x,y) 타일을 0..N-1 동안 간단히 배치
+      const tasks = [];
+      let x = 0, y = 0;
+      for (let i = 0; i < count; i++) {
+        const url = TILE_PATTERN(volume, level, x, y, 0);
+        tasks.push(fetchTile(url, i));
+        x++;
+        if (x >= 4) { x = 0; y++; } // 그리드처럼
+      }
+
+      const results = await Promise.all(tasks);
+      results.forEach(renderRow);
+    });
+  </script>
+</body>
+
+</html>
