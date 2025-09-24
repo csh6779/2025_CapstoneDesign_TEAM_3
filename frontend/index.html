@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대용량 이미지 뷰어 (OSD, Neuroglancer)</title>
+    <link rel="stylesheet" href="style/styles.css">
+</head>
+<body class="page-body">
+    <!-- 제목 -->
+    <header class="page-header">
+        <h1 class="page-title">대용량 이미지 뷰어</h1>
+    </header>
+
+    <main class="page-main">
+        <!-- 1. 업로드 블록 -->
+        <section id="uploadSection" class="card-section">
+            <div class="section-head">
+                <h2 class="title">사진 업로드</h2>
+                <p class="muted">Drag & Drop / 클릭</p>
+            </div>
+
+            <!-- Dropzone -->
+            <div id="dropzone">
+                <input id="fileInput" type="file" accept="image/*,.zip,.dzi,.dzip" multiple class="hidden">
+                <div class="dropzone-content">
+                    <p class="dz-message">여기에 파일을 드래그하거나 클릭해서 선택</p>
+                    <p class="muted">이미지 파일, ZIP, DZI, DZIP</p>
+                    <button id="selectBtn" class="btn">파일 선택</button>
+                </div>
+            </div>
+
+            <!-- 업로드 진행바 -->
+            <div id="uploadProgress" class="hidden">
+                <div class="progress-head">
+                    <span class="muted">업로드 진행</span>
+                    <span id="uploadPct" class="progress-pct">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%;"></div>    
+                </div>
+            </div>
+        </section>
+        
+        <!-- 2. 파일 확인 블록 -->
+        <section id="fileSection" class="card-section">
+            <div class="section-head">
+                <h2 class="title">파일 확인</h2>
+                <!-- 검색창, 새로고침 버튼 -->
+                <div class="gap">
+                    <input id="fileSearch" type="text" placeholder="파일명 검색" class="input">
+                    <button id="refreshBtn" class="btn">새로고침</button>
+                </div>
+            </div>
+            <!-- 파일 테이블 -->
+            <div class="table-wrap">
+                <table class="file-table">
+                    <thead>
+                        <tr>
+                            <th>파일명</th>
+                            <th>크기</th>
+                            <th>유형</th>
+                            <th>업로드 시간</th>
+                            <th class="width-compact">열기</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 3. Neuroglancer, OSD 블록 -->
+        <section id="viewerSection" class="card-section">
+            <div class="section-head">
+                <h2 class="title">이미지 뷰어 (Neuroglancer · OpenSeaDragon)</h2>
+                <!-- OSD 제어 버튼 -->
+                <div class="gap">
+                    <button id="initOsvBtn" class="btn">OSD 초기화</button>
+                    <button id="resetViewBtn" class="btn">뷰 리셋</button>
+                </div>
+            </div>
+            <!-- Neuroglancer / OSD 뷰어 패널 -->
+            <div class="grid-two">
+                <!-- Neuroglancer 패널 -->
+                <div class="viewer-panel">
+                    <div id="neuroglancerContainer" class="viewer"></div>
+                    <div class="viewer-overlay">
+                        <p class="viewer-title">Neuroglancer</p>
+                        <p class="muted">3D 뷰어 (3D 이미지에 적합)</p>
+                    </div>
+                </div>
+                <!-- OSD 패널 -->
+                <div class="viewer-panel">
+                    <div id="osdContainer" class="viewer"></div>
+                    <div id="osdOverlay" class="viewer-overlay">
+                        <p class="viewer-title">OpenSeaDragon</p>
+                        <p class="muted">2D 뷰어 (고해상도 이미지에 적합)</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. 메모리 사용량 블록 -->
+        <section id="memorySection" class="card-section">
+            <div class="section-head">
+                <h2 class="title">메모리 사용량</h2>
+            </div>
+            <!-- 메모리 통계 -->
+            <div class="grid-stats">
+                <div class="stat">
+                    <p class="muted">총 메모리</p>
+                    <p id="totalMemory" class="stat-value">-</p>
+                </div>
+                <div class="stat">
+                    <p class="muted">사용 중인 메모리</p>
+                    <p id="usedMemory" class="stat-value">-</p>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
