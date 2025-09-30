@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pillow
+numpy
+cloud-volume
+pyspng-seunglab
+python-multipart
+tifffile
