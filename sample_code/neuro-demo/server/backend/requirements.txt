@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-pillow
-numpy
-cloud-volume
-pyspng-seunglab
-python-multipart
-psutil==5.9.8
