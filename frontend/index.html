@@ -1,15 +1,24 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>대용량 이미지 뷰어 (OSD, Neuroglancer)</title>
     <link rel="stylesheet" href="style/styles.css">
 </head>
+
 <body class="page-body">
     <!-- 제목 -->
     <header class="page-header">
-        <h1 class="page-title">대용량 이미지 뷰어</h1>
+        <div class="container">
+            <h1 class="page-title">
+                <a href="index.html" class="page-title">대용량 이미지 뷰어</a>
+            </h1>
+            <div class="page-nav">
+                <a href="login.html" class="btn login-btn">로그인</a>
+            </div>
+        </div>
     </header>
 
     <main class="page-main">
@@ -37,11 +46,11 @@
                     <span id="uploadPct" class="progress-pct">0%</span>
                 </div>
                 <div class="progress-bar">
-                    <div id="progressFill" class="progress-fill" style="width: 0%;"></div>    
+                    <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
                 </div>
             </div>
         </section>
-        
+
         <!-- 2. 파일 확인 블록 -->
         <section id="fileSection" class="card-section">
             <div class="section-head">
@@ -119,4 +128,5 @@
         </section>
     </main>
 </body>
+
 </html>

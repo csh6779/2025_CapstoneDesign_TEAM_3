@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인</title>
+    <link rel="stylesheet" href="style/styles.css">
+</head>
+
+<body class="page-body">
+    <!-- 페이지 상단 중앙 로고/타이틀 -->
+    <header class="page-header">
+        <h1 class="page-title">
+            <a href="index.html" class="page-title">대용량 이미지 뷰어</a>
+        </h1>
+    </header>
+    <!-- ===== 로그인 전체 컨테이너 ===== -->
+    <main class="auth-container">
+        <!-- 로그인 카드 -->
+        <section class="auth-card">
+            <header class="auth-header">
+                <h1 class="auth-title">로그인</h1>
+            </header>
+            <form id="loginForm" class="auth-form">
+                <label for="username" class="auth-label">사용자 이름</label>
+                <input type="text" id="username" name="username" class="auth-input" placeholder="ID" required>
+
+                <label for="password" class="auth-label">비밀번호</label>
+                <input type="password" id="password" name="password" class="auth-input" placeholder="Password" required>
+
+                <div class="auth-row">
+                    <label class="auth-remember">
+                        <input id="rememberMe" type="checkbox">
+                        로그인 유지
+                    </label>
+                </div>
+
+                <p id="loginError" class="error-text hidden">이메일 또는 비밀번호가 올바르지 않습니다.</p>
+
+                <div class="auth-actions">
+                    <button id="loginSubmit" type="submit" class="btn">로그인</button>
+                </div>
+            </form>
+
+            <footer class="auth-foot">
+                <div class="auth-links" role="navigation" aria-label="보조 링크">
+                    <a href="signup.html" class="link">회원가입</a>
+                    <a href="find-id.html" class="link">아이디 찾기</a>
+                    <a href="reset.html" class="link">비밀번호 찾기</a>
+                </div>
+            </footer>
+        </section>
+    </main>
+</body>
+
+</html>
