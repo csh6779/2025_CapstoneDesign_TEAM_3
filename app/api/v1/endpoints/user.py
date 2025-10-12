@@ -11,3 +11,4 @@ def read_user_me():
     # 이 부분에서 UserService의 메소드를 호출하여 비즈니스 로직을 처리합니다.
     # user_data = UserService.get_current_user_info(...)
     return {"user_id": 1, "username": "experienced_developer", "role": "admin"}
+# ㅎㅇ
