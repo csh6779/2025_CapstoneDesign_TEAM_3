@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 
 # 임포트 경로 수정: schemas와 repositories는 app 디렉토리 기준으로 임포트합니다.
-from app.schemas.user import User, UserCreate, UserUpdate
-from app.repositories.user import UserRepository 
+from app.schemas.Users import User, UserCreate, UserUpdate
+from app.repositories.User import UserRepository 
 
 router = APIRouter(
     prefix="/users", # 경로 접두사 설정
