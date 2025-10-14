@@ -1,65 +1,44 @@
+# app/api/v1/endpoints/Auth.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from typing import Annotated
+
 from app.database.Database import get_db
-from app.core.Jwt import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-from app.repositories import User as user_repo
+from app.repositories.User import UserRepository
 from app.schemas.Users import Token
-from datetime import timedelta # <--- 이 임포트를 추가해야 timedelta를 사용할 수 있습니다.
+from app.core.Jwt.Security import create_access_token
+from app.core.Jwt.Config import settings
 
-router = APIRouter(
-    prefix="/auth",
-    tags=["Authentication"],
-    responses={401: {"description": "Authentication Failed"}},
-)
+router = APIRouter(prefix="/auth", tags=["auth"])
 
-def AuthenticateUser(db: Session, LoginId: str, Password: str):
-    """
-    사용자 ID와 비밀번호를 검증합니다.
-    """
-    user = user_repo.get_user_by_login_id(db, loginId=LoginId)
-    if not user:
-        return None
-    
-    # HashedPassword와 입력된 비밀번호 비교
-    if not verify_password(Password, user.HashedPassword):
-        return None
-        
-    return user
+# /v1 프리픽스 기준 token 엔드포인트 경로와 일치하게!
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token")
+
+repo = UserRepository()
 
 @router.post("/token", response_model=Token)
-async def LoginAccessToken(
-    FormData: OAuth2PasswordRequestForm = Depends(), 
-    db: Session = Depends(get_db)
+def login_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: Session = Depends(get_db),
 ):
-    """
-    로그인을 처리하고 JWT Access Token을 발급합니다.
-    """
-    # 1. 사용자 인증
-    user = AuthenticateUser(
-        db, 
-        loginId=FormData.usernameserName, # OAuth2PasswordRequestForm은 username 필드 사용
-        password=FormData.password
-    )
-    
+    # OAuth2PasswordRequestForm는 username, password 필드를 준다.
+    # 레포는 login_id 인자를 받도록 되어 있으니 매핑해서 호출.
+    user = repo.authenticate_user(db, login_id=form_data.username, password=form_data.password)
     if not user:
-        # 인증 실패 시 401 Unauthorized 반환
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # 2. 토큰 생성 (Payload에 User ID를 넣습니다)
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
     access_token = create_access_token(
-        data={"sub": str(user.id), "Role": user.Role}, # 이전 요청에 따라 'role'을 'Role'로 수정했습니다.
-        expires_delta=access_token_expires
+        subject=str(user.Id),  # 모델 컬럼 대소문자 주의(Id)
+        role=getattr(user, "Role", None),
+        expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
-    
-    # 3. 토큰 응답
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "expires_in_minutes": ACCESS_TOKEN_EXPIRE_MINUTES
-    }
+    return Token(
+        AccessToken=access_token,
+        TokenType="bearer",
+        ExpiresInMin=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    )

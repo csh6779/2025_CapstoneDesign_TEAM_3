@@ -9,7 +9,7 @@ class LogBase(BaseModel):
     ChunkCount: int = Field(..., example=128, description="이미지가 분리된 청크의 총 개수")
     ImageSize: int = Field(..., example=5120, description="원본 이미지의 크기 (KB)")
     Status: str = Field("IN_PROGRESS", example="IN_PROGRESS", description="현재 처리 상태")
-    FileBasePath: str = Field(..., example=r"C:\Users\USER\Desktop")
+    FileBasePath: str = Field(..., example="C:\Users\USER\Desktop")
 
 class LogCreate(LogBase):
     pass

@@ -1,61 +1,110 @@
-# app/repositories/user.py
+from sqlalchemy.orm import Session
+from typing import Optional, List
+from sqlalchemy.exc import IntegrityError
+from passlib.exc import PasswordSizeError
 
-from typing import List, Dict, Any, Optional
-from app.schemas.user import UserCreate, UserUpdate, User
+from app.schemas.Users import UserCreate, UserUpdate
+from app.core.Models import User as UserModel
+from app.core.Jwt.Security import verify_password, hash_password
 
-# 데이터베이스를 대신할 메모리 저장소
-# { user_id: {id: 1, username: "...", email: "...", password: "..."} }
-_USERS_DB: Dict[int, Dict[str, Any]] = {}
-_NEXT_ID = 1
 
 class UserRepository:
-    """
-    User 데이터를 관리하는 클래스 (실제 환경에서는 DB와의 상호작용을 처리)
-    """
+    # --- CREATE ---
+    def create_user(self, db: Session, *, payload: UserCreate) -> UserModel:
+        try:
+            hashed_password = hash_password(payload.Password)
+        except PasswordSizeError as e:
+            # passlib에서 72바이트 초과 등 발생 시 상위로 전달
+            raise ValueError(f"비밀번호가 너무 깁니다. ({e})")
 
-    def create_user(self, user_data: UserCreate) -> User:
-        """새로운 사용자 생성"""
-        global _NEXT_ID
-        
-        # 데이터베이스에 저장될 데이터 생성
-        new_user = user_data.model_dump() # Pydantic v2
-        # new_user = user_data.dict() # Pydantic v1
-        new_user["id"] = _NEXT_ID
-        
-        _USERS_DB[_NEXT_ID] = new_user
-        _NEXT_ID += 1
-        
-        # 응답 스키마(User)에 맞게 변환하여 반환
-        return User.model_validate(new_user)
+        user = UserModel(
+            LoginId=payload.LoginId,
+            HashedPassword=hashed_password,
+            UserName=payload.UserName,
+            Role=payload.Role,
+            UserImage=payload.UserImage,
+            Count=payload.Count,
+        )
 
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
-        """ID로 사용자 조회"""
-        user_data = _USERS_DB.get(user_id)
-        if user_data:
-            return User.model_validate(user_data)
-        return None
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+            return user
+        except IntegrityError:
+            db.rollback()
+            raise  # 라우터에서 409 처리
 
-    def get_all_users(self) -> List[User]:
-        """모든 사용자 조회"""
-        return [User.model_validate(data) for data in _USERS_DB.values()]
+    # --- READ ---
+    def get_user_by_id(self, db: Session, user_id: int) -> Optional[UserModel]:
+        return db.query(UserModel).filter(UserModel.Id == user_id).first()
 
-    def update_user(self, user_id: int, update_data: UserUpdate) -> Optional[User]:
-        """사용자 정보 업데이트"""
-        user_data = _USERS_DB.get(user_id)
-        if not user_data:
+    # (과거 호환) get_user -> get_user_by_id 위임
+    def get_user(self, db: Session, user_id: int) -> Optional[UserModel]:
+        return self.get_user_by_id(db, user_id)
+
+    def get_user_by_login_id(self, db: Session, login_id: str) -> Optional[UserModel]:
+        return db.query(UserModel).filter(UserModel.LoginId == login_id).first()
+
+    def list_users(self, db: Session, skip: int = 0, limit: int = 50) -> List[UserModel]:
+        return (
+            db.query(UserModel)
+            .order_by(UserModel.Id.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    # --- UPDATE ---
+    # 엔드포인트에서 전달하는 키워드 인자 시그니처와 일치시킴
+    def update_user(
+        self,
+        db: Session,
+        user_id: int,
+        *,
+        UserName: Optional[str] = None,
+        Role: Optional[str] = None,
+        UserImage: Optional[str] = None,
+        Count: Optional[int] = None,
+        Password: Optional[str] = None,
+    ) -> Optional[UserModel]:
+        user = self.get_user_by_id(db, user_id)
+        if not user:
             return None
-        
-        # 업데이트할 필드만 병합
-        update_fields = update_data.model_dump(exclude_unset=True)
-        # update_fields = update_data.dict(exclude_unset=True)
-        
-        user_data.update(update_fields)
-        
-        return User.model_validate(user_data)
 
-    def delete_user(self, user_id: int) -> bool:
-        """사용자 삭제"""
-        if user_id in _USERS_DB:
-            del _USERS_DB[user_id]
-            return True
-        return False
+        if UserName is not None:
+            user.UserName = UserName
+        if Role is not None:
+            user.Role = Role
+        if UserImage is not None:
+            user.UserImage = UserImage
+        if Count is not None:
+            user.Count = Count
+        if Password is not None:
+            try:
+                user.HashedPassword = hash_password(Password)
+            except PasswordSizeError as e:
+                raise ValueError(f"새 비밀번호가 너무 깁니다. ({e})")
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    # --- DELETE ---
+    def delete_user(self, db: Session, user_id: int) -> bool:
+        user = self.get_user_by_id(db, user_id)
+        if not user:
+            return False
+        db.delete(user)
+        db.commit()
+        return True
+
+    # --- AUTH ---
+    def authenticate_user(self, db: Session, *, login_id: str, password: str) -> Optional[UserModel]:
+        user = self.get_user_by_login_id(db, login_id)
+        if not user:
+            return None
+        if not verify_password(password, user.HashedPassword):
+            return None
+        return user
