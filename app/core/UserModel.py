@@ -1,25 +1,23 @@
-
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
-from app.database.Database import Base
+from app.database.database import Base
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "Users"
 
-    Id = Column(Integer, primary_key=True, index=True)
-    LoginId = Column(String(50), unique=True, index=True) 
-    HashedPassword= Column(String(100)) 
-    UserName = Column(String(50))
-    Role = Column(String(20), default="bronze")
-    UserImage = Column(String(255), nullable=True) 
-    Count = Column(Integer, default=0)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    LoginId = Column(String(50), unique=True, nullable=False, index=True)
+    PasswordHash = Column(String(255), nullable=False)
+    UserName = Column(String(30), nullable=False)
+    Role = Column(String(10), nullable=True, default="user")
+    UserImage = Column(String(255), nullable=True)
 
-
-    Log = relationship(
-        "Log",               # 문자열 참조: 순환 import 방지
-        back_populates="User",
-        uselist=False,       # 1:1
+    # ImageLog와의 관계 (1:N)
+    image_logs = relationship(
+        "ImageLog",
+        back_populates="user",
         cascade="all, delete-orphan"
     )
+
     def __repr__(self):
-        return f"<User(id={self.Id}, loginId='{self.LoginId}')>"
+        return f"<User(id={self.id}, LoginId='{self.LoginId}', UserName='{self.UserName}')>"
