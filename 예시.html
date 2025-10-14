@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuroglancer 대용량 뷰어 시스템</title>
+    <style>
+        /* 기본적인 스타일 초기화 및 레이아웃 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f9;
+            color: #333;
+        }
+
+        /* 공통 컨테이너 스타일 */
+        .container {
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 폼 스타일 */
+        .form-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 40px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background-color: #fcfcfc;
+        }
+
+        .form-container h2 {
+            text-align: center;
+            color: #007bff;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="password"],
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .form-group input[type="file"] {
+            padding: 3px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .toggle-link {
+            display: block;
+            text-align: center;
+            margin-top: 15px;
+            color: #007bff;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        /* 메인 페이지 레이아웃 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            background-color: #fff;
+            border-bottom: 1px solid #eee;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #007bff;
+            font-size: 24px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .user-info .grade {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin-right: 15px;
+            color: white;
+            font-size: 14px;
+        }
+
+        /* 등급별 색상 */
+        .bronze { background-color: #cd7f32; }
+        .silver { background-color: #c0c0c0; }
+        .gold { background-color: #ffd700; color: #333;}
+
+        .profile-pic {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #007bff;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .upload-section {
+            padding: 20px;
+            border: 1px dashed #007bff;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .upload-section h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+
+        .file-input-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .file-input-group input[type="file"] {
+            flex-grow: 1;
+            max-width: 300px;
+        }
+
+        #chunking-result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            text-align: left;
+            white-space: pre-wrap; /* 청크 결과를 줄 바꿈하여 보여주기 */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="auth-view">
+        <div class="container form-container">
+            <div id="login-form">
+                <h2>로그인</h2>
+                <div class="form-group">
+                    <label for="login-id">아이디</label>
+                    <input type="text" id="login-id" placeholder="아이디" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">비밀번호</label>
+                    <input type="password" id="login-password" placeholder="비밀번호" required>
+                </div>
+                <button onclick="handleLogin()">로그인</button>
+                <a class="toggle-link" onclick="toggleAuthView('register')">회원가입</a>
+            </div>
+
+            <div id="register-form" style="display: none;">
+                <h2>회원가입</h2>
+                <div class="form-group">
+                    <label for="reg-id">아이디</label>
+                    <input type="text" id="reg-id" placeholder="아이디" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">비밀번호</label>
+                    <input type="password" id="reg-password" placeholder="비밀번호" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-name">이름</label>
+                    <input type="text" id="reg-name" placeholder="이름" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-profile-pic">프로필 사진</label>
+                    <input type="file" id="reg-profile-pic" accept="image/*" required>
+                </div>
+                <button onclick="handleRegister()">회원가입</button>
+                <a class="toggle-link" onclick="toggleAuthView('login')">로그인</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-view" style="display: none;">
+        <header class="header">
+            <h1>Neuroglancer 대용량 뷰어</h1>
+            <div class="user-info">
+                <span id="user-grade" class="grade"></span>
+                <img id="user-profile-pic" class="profile-pic" src="" alt="프로필 사진">
+                <button style="width: auto; margin-left: 20px; padding: 5px 15px;" onclick="handleLogout()">로그아웃</button>
+            </div>
+        </header>
+
+        <div class="container main-content">
+            <h2>대용량 데이터 관리</h2>
+            
+            <div class="upload-section">
+                <h3>사진 등록 및 청크 분해</h3>
+                <p>대용량 이미지/데이터 파일을 선택하고 청크 분해를 시뮬레이션합니다.</p>
+                <div class="file-input-group">
+                    <input type="file" id="data-file-input">
+                    <button style="width: 150px;" onclick="chunkFile()">청크 분해 시작</button>
+                </div>
+                <div id="chunking-result">
+                    여기에 청크 분해 결과가 표시됩니다.
+                </div>
+            </div>
+
+            <div id="neuroglancer-viewer" style="height: 600px; border: 1px solid #ccc; margin-top: 30px; background-color: #eee;">
+                Neuroglancer 뷰어 자리 (실제 Neuroglancer 통합 코드는 여기에 추가되어야 합니다.)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 상태 변수 (실제 백엔드 대체)
+        let currentUser = null; // { id: 'test', name: '테스터', grade: 'bronze', profilePic: 'default_pic.png' }
+        const userDatabase = {}; // { 'id': { password: 'pw', name: 'name', profilePic: 'base64' } }
+        const defaultProfilePic = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#adb5bd"/><path d="M12 4a4 4 0 100 8 4 4 0 000-8zM12 14c-4.42 0-8 3.58-8 8h16c0-4.42-3.58-8-8-8z" fill="#f8f9fa"/></svg>';
+        const grades = ['bronze', 'silver', 'gold'];
+
+        // 뷰 전환 함수
+        function toggleAuthView(type) {
+            document.getElementById('login-form').style.display = type === 'login' ? 'block' : 'none';
+            document.getElementById('register-form').style.display = type === 'register' ? 'block' : 'none';
+        }
+
+        // 회원가입 처리
+        function handleRegister() {
+            const id = document.getElementById('reg-id').value;
+            const password = document.getElementById('reg-password').value;
+            const name = document.getElementById('reg-name').value;
+            const profileFileInput = document.getElementById('reg-profile-pic');
+            const file = profileFileInput.files[0];
+
+            if (!id || !password || !name || !file) {
+                alert('모든 정보를 입력하고 프로필 사진을 선택해 주세요.');
+                return;
+            }
+
+            if (userDatabase[id]) {
+                alert('이미 존재하는 아이디입니다.');
+                return;
+            }
+
+            // 파일 리더를 사용하여 프로필 사진을 Base64로 변환 (임시 저장용)
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                userDatabase[id] = {
+                    password: password,
+                    name: name,
+                    profilePic: e.target.result, // Base64 이미지
+                    grade: 'bronze' // 초기 등급 설정
+                };
+                alert('회원가입 성공! 로그인 해주세요.');
+                toggleAuthView('login');
+                // 입력 필드 초기화
+                document.getElementById('reg-id').value = '';
+                document.getElementById('reg-password').value = '';
+                document.getElementById('reg-name').value = '';
+                profileFileInput.value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 로그인 처리
+        function handleLogin() {
+            const id = document.getElementById('login-id').value;
+            const password = document.getElementById('login-password').value;
+
+            if (userDatabase[id] && userDatabase[id].password === password) {
+                // 임시로 등급을 랜덤하게 부여 (실제는 DB에서 가져옴)
+                const randomGrade = grades[Math.floor(Math.random() * grades.length)];
+                
+                currentUser = {
+                    id: id,
+                    name: userDatabase[id].name,
+                    profilePic: userDatabase[id].profilePic,
+                    grade: randomGrade
+                };
+                
+                alert(`${currentUser.name}님, 환영합니다!`);
+                showMainView();
+            } else {
+                alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+            }
+        }
+
+        // 로그아웃 처리
+        function handleLogout() {
+            currentUser = null;
+            document.getElementById('main-view').style.display = 'none';
+            document.getElementById('auth-view').style.display = 'block';
+            alert('로그아웃 되었습니다.');
+        }
+
+        // 메인 뷰 표시
+        function showMainView() {
+            if (!currentUser) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            // 사용자 정보 업데이트
+            document.getElementById('user-profile-pic').src = currentUser.profilePic || defaultProfilePic;
+            const gradeElement = document.getElementById('user-grade');
+            gradeElement.textContent = currentUser.grade.toUpperCase();
+            gradeElement.className = `grade ${currentUser.grade.toLowerCase()}`;
+            
+            document.getElementById('auth-view').style.display = 'none';
+            document.getElementById('main-view').style.display = 'block';
+        }
+
+        // 청크 분해 시뮬레이션
+        function chunkFile() {
+            const fileInput = document.getElementById('data-file-input');
+            const file = fileInput.files[0];
+            const resultDiv = document.getElementById('chunking-result');
+
+            if (!file) {
+                resultDiv.textContent = '먼저 파일을 선택해 주세요.';
+                return;
+            }
+
+            const chunkSize = 10 * 1024 * 1024; // 10MB 청크 사이즈 (예시)
+            const fileSize = file.size;
+            let start = 0;
+            let chunkCount = 0;
+            let output = `--- 파일 정보 ---\n파일명: ${file.name}\n파일 크기: ${formatBytes(fileSize)}\n청크 크기: ${formatBytes(chunkSize)}\n\n--- 청크 분해 결과 ---\n`;
+
+            while (start < fileSize) {
+                const end = Math.min(start + chunkSize, fileSize);
+                const chunk = file.slice(start, end);
+                
+                chunkCount++;
+                output += `[청크 #${chunkCount}] 시작: ${formatBytes(start)}, 끝: ${formatBytes(end)}, 크기: ${formatBytes(chunk.size)}\n`;
+
+                // 실제 업로드 로직: 
+                // 여기서 chunk 객체를 서버의 업로드 엔드포인트로 전송해야 합니다.
+                // 예: sendChunkToServer(chunk, chunkCount, file.name);
+
+                start = end;
+            }
+            
+            output += `\n**총 ${chunkCount}개의 청크로 분해 시뮬레이션 완료**`;
+            resultDiv.textContent = output;
+            console.log("청크 분해 시뮬레이션 완료. 실제 서버 전송 로직이 필요합니다.", file);
+        }
+
+        // 바이트를 읽기 쉬운 형식으로 변환하는 헬퍼 함수
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        // 초기 로드 시 로그인 뷰 표시
+        document.addEventListener('DOMContentLoaded', () => {
+            toggleAuthView('login');
+        });
+    </script>
+</body>
+</html>
