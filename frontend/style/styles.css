@@ -197,18 +197,6 @@ body {
 }
 
 /* ===== 뷰어 영역 ===== */
-.grid-two {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-}
-
-@media (min-width: 1024px) {
-    .grid-two {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
 .viewer-panel {
     position: relative;
     min-height: 360px;
@@ -367,4 +355,17 @@ body {
     color: #9ca3af;
     opacity: 0.7;
     margin: 0 6px 0 2px;
+}
+
+/* 로그 */
+.log-container {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.log-entry {
+    font-size: 0.9rem;
+    padding: 6px 0;
+    color: #9ca3af;
 }

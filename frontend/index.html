@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>대용량 이미지 뷰어 (OSD, Neuroglancer)</title>
+    <title>대용량 이미지 뷰어 (Neuroglancer)</title>
     <link rel="stylesheet" href="style/styles.css">
 </head>
 
@@ -78,33 +78,21 @@
             </div>
         </section>
 
-        <!-- 3. Neuroglancer, OSD 블록 -->
+        <!-- 3. Neuroglancer 블록 -->
         <section id="viewerSection" class="card-section">
             <div class="section-head">
-                <h2 class="title">이미지 뷰어 (Neuroglancer · OpenSeaDragon)</h2>
-                <!-- OSD 제어 버튼 -->
+                <h2 class="title">이미지 뷰어 (Neuroglancer)</h2>
+                <!-- 제어 버튼 -->
                 <div class="gap">
-                    <button id="initOsvBtn" class="btn">OSD 초기화</button>
                     <button id="resetViewBtn" class="btn">뷰 리셋</button>
                 </div>
             </div>
-            <!-- Neuroglancer / OSD 뷰어 패널 -->
-            <div class="grid-two">
-                <!-- Neuroglancer 패널 -->
-                <div class="viewer-panel">
-                    <div id="neuroglancerContainer" class="viewer"></div>
-                    <div class="viewer-overlay">
-                        <p class="viewer-title">Neuroglancer</p>
-                        <p class="muted">3D 뷰어 (3D 이미지에 적합)</p>
-                    </div>
-                </div>
-                <!-- OSD 패널 -->
-                <div class="viewer-panel">
-                    <div id="osdContainer" class="viewer"></div>
-                    <div id="osdOverlay" class="viewer-overlay">
-                        <p class="viewer-title">OpenSeaDragon</p>
-                        <p class="muted">2D 뷰어 (고해상도 이미지에 적합)</p>
-                    </div>
+            <!-- Neuroglancer 패널 -->
+            <div class="viewer-panel">
+                <div id="neuroglancerContainer" class="viewer"></div>
+                <div class="viewer-overlay">
+                    <p class="viewer-title">Neuroglancer</p>
+                    <p class="muted">3D 뷰어 (3D 이미지에 적합)</p>
                 </div>
             </div>
         </section>
