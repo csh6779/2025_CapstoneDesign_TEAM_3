@@ -1,13 +1,11 @@
 <!DOCTYPE html>
-<html lang="ko">
-
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>로그인</title>
+    <title>회원가입</title>
     <link rel="stylesheet" href="style/styles.css">
 </head>
-
 <body class="page-body">
     <!-- 페이지 상단 중앙 로고/타이틀 -->
     <header class="page-header">
@@ -15,42 +13,40 @@
             <a href="index.html" class="page-title">대용량 이미지 뷰어</a>
         </h1>
     </header>
-    <!-- ===== 로그인 전체 컨테이너 ===== -->
+    <!-- ===== 회원가입 전체 컨테이너 ===== -->
     <main class="auth-container">
-        <!-- 로그인 카드 -->
+        <!-- 회원가입 카드 -->
         <section class="auth-card">
             <header class="auth-header">
-                <h1 class="auth-title">로그인</h1>
+                <h1 class="auth-title">회원가입</h1>
             </header>
-            <form id="loginForm" class="auth-form">
+            <form id="signupForm" class="auth-form">
                 <label for="username" class="auth-label">아이디</label>
                 <input type="text" id="username" name="username" class="auth-input" placeholder="ID" required>
+
+                <label for="name" class="auth-label">이름</label>
+                <input type="text" id="name" name="name" class="auth-input" placeholder="Name" required>
 
                 <label for="password" class="auth-label">비밀번호</label>
                 <input type="password" id="password" name="password" class="auth-input" placeholder="Password" required>
 
-                <div class="auth-row">
-                    <label class="auth-remember">
-                        <input id="rememberMe" type="checkbox">
-                        로그인 유지
-                    </label>
-                </div>
+                <label for="confirmPassword" class="auth-label">비밀번호 확인</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" class="auth-input" placeholder="Confirm Password" required>
 
-                <p id="loginError" class="error-text hidden">이메일 또는 비밀번호가 올바르지 않습니다.</p>
+                <p id="signupError" class="error-text hidden">회원가입 중 오류가 발생했습니다. 다시 시도해주세요.</p>
 
                 <div class="auth-actions">
-                    <button id="loginSubmit" type="submit" class="btn">로그인</button>
+                    <button id="signupSubmit" type="submit" class="btn">회원가입</button>
                 </div>
             </form>
 
             <footer class="auth-foot">
                 <div class="auth-links" role="navigation" aria-label="sublinks">
-                    <a href="signup.html" class="link">회원가입</a>
+                    <a href="login.html" class="link">로그인</a>
                     <a href="find-id.html" class="link">아이디 찾기</a>
                     <a href="find-password.html" class="link">비밀번호 찾기</a>
                 </div>
             </footer>
-        </section>
     </main>
 </body>
 
