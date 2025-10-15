@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from app.database.Database import get_db
-from app.core.Jwt import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-from app.repositories import User as user_repo
+from datetime import timedelta
+
+from app.database.database import get_db
+from app.core.Jwt import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.repositories import UserRepository
 from app.schemas.Users import Token
-from datetime import timedelta # <--- 이 임포트를 추가해야 timedelta를 사용할 수 있습니다.
 
 router = APIRouter(
     prefix="/auth",
@@ -13,33 +14,39 @@ router = APIRouter(
     responses={401: {"description": "Authentication Failed"}},
 )
 
-def AuthenticateUser(db: Session, LoginId: str, Password: str):
+def authenticate_user(db: Session, login_id: str, password: str):
     """
     사용자 ID와 비밀번호를 검증합니다.
     """
-    user = user_repo.get_user_by_login_id(db, loginId=LoginId)
+    user_repo = UserRepository(db)
+    
+    # LoginId로 사용자 조회
+    user = user_repo.get_user_by_login_id(login_id)
     if not user:
         return None
     
-    # HashedPassword와 입력된 비밀번호 비교
-    if not verify_password(Password, user.HashedPassword):
+    # PasswordHash와 입력된 비밀번호 비교
+    if not user_repo.verify_password(password, user.PasswordHash):
         return None
         
     return user
 
 @router.post("/token", response_model=Token)
-async def LoginAccessToken(
-    FormData: OAuth2PasswordRequestForm = Depends(), 
+async def login_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db)
 ):
     """
     로그인을 처리하고 JWT Access Token을 발급합니다.
+    
+    - OAuth2PasswordRequestForm은 username과 password 필드를 사용합니다
+    - username 필드에 LoginId를 입력해야 합니다
     """
     # 1. 사용자 인증
-    user = AuthenticateUser(
+    user = authenticate_user(
         db, 
-        loginId=FormData.usernameserName, # OAuth2PasswordRequestForm은 username 필드 사용
-        password=FormData.password
+        login_id=form_data.username,  # OAuth2PasswordRequestForm은 username 필드 사용
+        password=form_data.password
     )
     
     if not user:
@@ -50,16 +57,16 @@ async def LoginAccessToken(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 2. 토큰 생성 (Payload에 User ID를 넣습니다)
+    # 2. 토큰 생성 (Payload에 User ID와 Role을 넣습니다)
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": str(user.id), "Role": user.Role}, # 이전 요청에 따라 'role'을 'Role'로 수정했습니다.
+        data={"sub": str(user.id), "Role": user.Role},
         expires_delta=access_token_expires
     )
     
     # 3. 토큰 응답
     return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "expires_in_minutes": ACCESS_TOKEN_EXPIRE_MINUTES
+        "AccessToken": access_token, 
+        "TokenType": "bearer",
+        "ExpiresInMin": ACCESS_TOKEN_EXPIRE_MINUTES
     }

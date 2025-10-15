@@ -10,6 +10,10 @@ sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..'
 
 from app.database.database import Base, engine 
 
+# 모델들을 import하여 Base.metadata에 등록
+from app.core.UserModel import User
+from app.core.ImageLogModel import ImageLog
+
 config = context.config
 
 
