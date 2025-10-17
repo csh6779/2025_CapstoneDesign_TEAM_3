@@ -34,9 +34,9 @@ class UserOut(UserBase):
     model_config = _BASE_CONFIG
 
 class Token(BaseModel):
-    AccessToken: str = Field(..., description="JWT 엑세스 토큰")
-    TokenType: str = Field("bearer", description="토큰 타입")
-    ExpiresInMin: int = Field(..., description="토큰 만료 (분)")
+    AccessToken: str = Field(..., description="JWT 엑세스 토큰", alias="access_token")
+    TokenType: str = Field("bearer", description="토큰 타입", alias="token_type")
+    ExpiresInMin: int = Field(..., description="토큰 만료 (분)",alias="expires_in")
 
     model_config = _BASE_CONFIG
 
