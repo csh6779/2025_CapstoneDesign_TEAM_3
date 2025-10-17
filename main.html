@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>대용량 이미지 뷰어</title>
+    <!-- Font Awesome 아이콘 로드 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* --- 이미지 뷰어 스타일 --- */
+        .dropzone {
+            border: 2px dashed #3b82f6;
+            transition: all 0.3s ease;
+        }
+        .dropzone.active {
+            border-color: #1d4ed8;
+            background-color: #eff6ff;
+        }
+        .viewer-box {
+            background: #f1f5f9; /* Slightly darker background for contrast */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            position: relative;
+        }
+        .viewer-box img {
+            max-width: 100%;
+            max-height: 100%;
+            transition: transform 0.3s ease;
+            object-fit: contain; /* 이미지가 잘리지 않도록 수정 */
+        }
+        /* --- 모달 전환 효과 스타일 --- */
+        .modal-transition {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .modal-hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+        .modal-visible {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-800 font-sans">
+    <div class="container mx-auto px-4 h-screen flex flex-col">
+        <!-- 통합 헤더 -->
+        <header class="py-4 border-b flex-shrink-0 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-600">대용량 이미지 뷰어</h1>
+            <div class="flex items-center space-x-4">
+                <span id="headerUserId" class="font-semibold text-gray-700"></span>
+                <button class="profile-btn rounded-full overflow-hidden w-12 h-12 border-2 border-gray-300 hover:border-blue-500 transition-colors" onclick="openModal()">
+                    <img src="https://placehold.co/100x100/E2E8F0/4A5568?text=User" alt="프로필" class="w-full h-full object-cover" id="mainProfileImg">
+                </button>
+            </div>
+        </header>
+
+        <!-- 메인 컨텐츠 (overflow-y-auto 추가) -->
+        <div class="flex-1 grid grid-cols-4 gap-4 py-4 overflow-y-auto">
+            <!-- 파일 업로드 섹션 -->
+            <div class="col-span-1 bg-gray-50 p-4 rounded-lg flex flex-col">
+                <div id="dropzone" class="dropzone p-6 rounded-lg text-center mb-4">
+                    <i class="fas fa-cloud-upload-alt text-blue-500 text-4xl mb-2"></i>
+                    <p class="text-gray-600">파일을 드래그하세요</p>
+                    <p class="text-sm text-gray-500 mt-2">또는</p>
+                    <input type="file" id="fileInput" multiple hidden />
+                    <button id="browseBtn" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        파일 찾기
+                    </button>
+                </div>
+
+                <div class="file-list flex-1 overflow-auto">
+                    <h3 class="font-semibold text-gray-700 mb-2">업로드된 파일</h3>
+                    <div id="fileList" class="space-y-2 text-sm text-gray-700"></div>
+                </div>
+            </div>
+
+            <!-- 메인 뷰어 영역 -->
+            <div class="col-span-3 grid grid-rows-2 gap-4">
+                <!-- OSD 뷰어 -->
+                <div class="bg-gray-100 rounded-lg p-2 flex flex-col overflow-hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-gray-700">OSD Image Viewer</h3>
+                        <div class="flex space-x-2">
+                            <button id="zoomIn" class="p-1 text-blue-500 hover:text-blue-700"><i class="fas fa-search-plus"></i></button>
+                            <button id="zoomOut" class="p-1 text-blue-500 hover:text-blue-700"><i class="fas fa-search-minus"></i></button>
+                            <button id="rotate" class="p-1 text-blue-500 hover:text-blue-700"><i class="fas fa-rotate-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="flex-1 viewer-box" id="viewer2D">
+                        <p class="text-gray-400">이미지가 여기에 표시됩니다</p>
+                    </div>
+                </div>
+
+                <!-- Neuroglancer 뷰어 (Iframe으로 실제 기능 구현) -->
+                <div class="bg-gray-100 rounded-lg p-2 flex flex-col overflow-hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-gray-700">Neuroglancer 3D Viewer</h3>
+                        <div class="flex space-x-2">
+                            <button class="p-1 text-blue-500 hover:text-blue-700"><i class="fas fa-rotate"></i></button>
+                            <button class="p-1 text-blue-500 hover:text-blue-700"><i class="fas fa-layer-group"></i></button>
+                            <button class="p-1 text-blue-500 hover:text-blue-700"><i class="fas fa-sliders-h"></i></button>
+                        </div>
+                    </div>
+                    <div class="flex-1 w-full h-full" id="viewer3D">
+                        <iframe src="https://neuroglancer-demo.appspot.com/#!%7B%22layers%22%3A%5B%7B%22type%22%3A%22image%22%2C%22source%22%3A%22precomputed%3A%2F%2Fgs%3A%2F%2Fneuroglancer-public-data%2Fflyem_fib-25%2Fimage%22%2C%22tab%22%3A%22source%22%2C%22name%22%3A%22image%22%7D%5D%2C%22navigation%22%3A%7B%22pose%22%3A%7B%22position%22%3A%7B%22voxelSize%22%3A%5B8%2C8%2C8%5D%2C%22voxelCoordinates%22%3A%5B16369.5%2C18111.5%2C21879%5D%7D%7D%2C%22zoomFactor%22%3A15.3%7D%2C%22perspectiveZoom%22%3A2000%7D" class="w-full h-full border-0 rounded-md"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 시스템 모니터 -->
+        <div class="py-3 bg-gray-100 rounded-lg flex-shrink-0">
+            <div class="flex justify-between items-center mb-1 px-2">
+                <span class="text-sm font-medium">시스템 메모리</span>
+                <span class="text-xs system-memory-text">2.8 GB / 16 GB</span>
+            </div>
+            <div class="h-3 bg-gray-200 rounded-full overflow-hidden mx-2">
+                <div class="h-full bg-blue-500 system-memory-bar" style="width: 17.5%"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 계정 관리 모달 (기존 프로필.html에서 가져옴) -->
+    <div id="accountModal" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 modal-transition modal-hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-auto md:h-auto max-h-[90vh] flex flex-col md:flex-row overflow-hidden">
+            <!-- 왼쪽 메뉴 -->
+            <nav class="w-full md:w-1/4 bg-gray-50 p-6 border-r border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-8">계정 관리</h2>
+                <ul class="space-y-2">
+                    <li><button id="tab-profile-btn" onclick="showTab('profile')" class="w-full text-left px-4 py-3 rounded-lg font-semibold bg-blue-100 text-blue-600 transition-colors">개인정보 수정</button></li>
+                    <li><button id="tab-password-btn" onclick="showTab('password')" class="w-full text-left px-4 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition-colors">비밀번호 변경</button></li>
+                </ul>
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                     <button onclick="logout()" class="w-full text-left px-4 py-3 rounded-lg font-semibold text-red-600 hover:bg-red-100 transition-colors">로그아웃</button>
+                </div>
+            </nav>
+
+            <!-- 오른쪽 컨텐츠 -->
+            <div class="w-full md:w-3/4 p-8 overflow-y-auto">
+                <!-- 개인정보 수정 탭 -->
+                <div id="tab-profile" class="">
+                    <h3 class="text-3xl font-bold text-gray-800 mb-6">개인정보 수정</h3>
+                    <div class="flex flex-col items-center mb-6">
+                        <div class="relative group w-32 h-32 mb-4">
+                            <img src="https://placehold.co/150x150/E2E8F0/4A5568?text=User" alt="프로필 사진" id="profilePreview" class="w-32 h-32 rounded-full object-cover border-4 border-gray-200">
+                            <button onclick="deleteProfileImage()" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-full text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <label for="photoInput" class="cursor-pointer bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors">
+                            이미지 변경 <input type="file" accept="image/*" id="photoInput" class="hidden" onchange="previewImage(event)">
+                        </label>
+                    </div>
+                    <div class="space-y-4">
+                        <div><label for="userId" class="block mb-1 font-semibold text-gray-600">사용자 ID</label><input type="text" id="userId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                        <div><label for="userName" class="block mb-1 font-semibold text-gray-600">사용자 이름</label><input type="text" id="userName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                    </div>
+                    <div class="flex justify-end mt-8">
+                        <button onclick="closeModal()" class="px-6 py-2 mr-2 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">취소</button>
+                        <button onclick="submitProfile()" class="px-6 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">저장하기</button>
+                    </div>
+                </div>
+
+                <!-- 비밀번호 변경 탭 -->
+                <div id="tab-password" class="hidden">
+                     <h3 class="text-3xl font-bold text-gray-800 mb-6">비밀번호 변경</h3>
+                     <div id="verifySection">
+                        <p class="text-gray-600 mb-4">보안을 위해 현재 사용자 정보를 확인합니다.</p>
+                        <div class="space-y-4">
+                            <div><label for="verifyId" class="block mb-1 font-semibold text-gray-600">현재 사용자 ID</label><input type="text" id="verifyId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                            <div><label for="verifyName" class="block mb-1 font-semibold text-gray-600">현재 사용자 이름</label><input type="text" id="verifyName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                        </div>
+                        <div class="flex justify-end mt-8"><button onclick="verifyUser()" class="px-6 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">본인 확인</button></div>
+                    </div>
+                    <div id="newPasswordSection" class="hidden mt-8">
+                        <div class="space-y-4">
+                            <div><label for="newPassword" class="block mb-1 font-semibold text-gray-600">새 비밀번호</label><input type="password" id="newPassword" placeholder="6자 이상 입력해주세요" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                            <div><label for="confirmPassword" class="block mb-1 font-semibold text-gray-600">비밀번호 확인</label><input type="password" id="confirmPassword" placeholder="다시 한번 입력해주세요" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                        </div>
+                        <div class="flex justify-end mt-8">
+                            <button onclick="closeModal()" class="px-6 py-2 mr-2 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">취소</button>
+                            <button onclick="submitNewPassword()" class="px-6 py-2 rounded-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors">비밀번호 변경</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 로그아웃 확인 모달 -->
+    <div id="logoutConfirmModal" class="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 modal-transition modal-hidden">
+        <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-sm text-center">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">로그아웃</h3>
+            <p class="text-gray-600 mb-8">정말로 로그아웃 하시겠습니까?</p>
+            <div class="flex justify-center space-x-4">
+                <button onclick="closeLogoutModal()" class="px-6 py-2 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">취소</button>
+                <button onclick="confirmLogout()" class="px-6 py-2 rounded-lg font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors">로그아웃</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 알림 메시지 (Toast) -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 transition-opacity duration-300"><p id="toast-message"></p></div>
+
+    <script>
+        const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/150x150/E2E8F0/4A5568?text=User';
+
+        // --- 시스템 메모리 관리 ---
+        const TOTAL_SYSTEM_MEMORY_MB = 16 * 1024;
+        const BASE_MEMORY_USAGE_MB = 2.8 * 1024;
+        let totalFileSizeMB = 0;
+        const memoryText = document.querySelector('.system-memory-text');
+        const memoryBar = document.querySelector('.system-memory-bar');
+
+        function updateMemoryUsage() {
+            const usedMemoryMB = BASE_MEMORY_USAGE_MB + totalFileSizeMB;
+            const cappedUsedMemoryMB = Math.min(usedMemoryMB, TOTAL_SYSTEM_MEMORY_MB);
+            const usedMemoryGB = (cappedUsedMemoryMB / 1024).toFixed(1);
+            const totalMemoryGB = (TOTAL_SYSTEM_MEMORY_MB / 1024);
+            const percentage = (cappedUsedMemoryMB / TOTAL_SYSTEM_MEMORY_MB) * 100;
+
+            memoryText.textContent = `${usedMemoryGB} GB / ${totalMemoryGB} GB`;
+            memoryBar.style.width = `${percentage}%`;
+        }
+
+        // --- 이미지 뷰어 스크립트 ---
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+        const fileList = document.getElementById('fileList');
+        const viewer2D = document.getElementById('viewer2D');
+
+        let currentImage = null;
+        let scale = 1;
+        let rotation = 0;
+
+        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('active'); });
+        dropzone.addEventListener('dragleave', () => { dropzone.classList.remove('active'); });
+        dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('active'); handleFiles(e.dataTransfer.files); });
+        browseBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+        function handleFiles(files) {
+            [...files].forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'file-item p-2 hover:bg-blue-50 rounded cursor-pointer border';
+                item.dataset.fileSize = file.size; 
+                item.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="flex-1 truncate pr-2">
+                            <div class="truncate font-medium">${file.name}</div>
+                            <div class="text-xs text-gray-500">${(file.size/1024/1024).toFixed(2)} MB</div>
+                        </div>
+                        <button class="delete-btn text-gray-400 hover:text-red-600 p-1 flex-shrink-0"><i class="fas fa-times-circle"></i></button>
+                    </div>`;
+                
+                item.addEventListener('click', () => showImage(file, item));
+                
+                const deleteBtn = item.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); 
+                    deleteFile(item);
+                });
+
+                fileList.appendChild(item);
+                totalFileSizeMB += file.size / 1024 / 1024;
+
+                if (index === 0 && !currentImage) {
+                    showImage(file, item);
+                }
+            });
+            updateMemoryUsage();
+        }
+
+        function deleteFile(item) {
+            const isSelected = item.classList.contains('bg-blue-100');
+            const fileSize = parseInt(item.dataset.fileSize, 10);
+            if (!isNaN(fileSize)) {
+                totalFileSizeMB -= fileSize / 1024 / 1024;
+            }
+
+            if (isSelected) {
+                viewer2D.innerHTML = '<p class="text-gray-400">이미지가 여기에 표시됩니다</p>';
+                currentImage = null;
+            }
+            item.remove();
+            showToast('🗑️ 파일이 삭제되었습니다.');
+            updateMemoryUsage();
+        }
+
+        function showImage(file, selectedItem) {
+            const allItems = fileList.querySelectorAll('.file-item');
+            allItems.forEach(it => it.classList.remove('bg-blue-100'));
+            selectedItem.classList.add('bg-blue-100');
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                viewer2D.innerHTML = "";
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                currentImage = img;
+                scale = 1;
+                rotation = 0;
+                applyTransform();
+                viewer2D.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        document.getElementById('zoomIn').addEventListener('click', () => { if (currentImage) { scale += 0.1; applyTransform(); } });
+        document.getElementById('zoomOut').addEventListener('click', () => { if (currentImage && scale > 0.2) { scale -= 0.1; applyTransform(); } });
+        document.getElementById('rotate').addEventListener('click', () => { if (currentImage) { rotation += 90; applyTransform(); } });
+
+        function applyTransform() { 
+            if (currentImage) {
+                currentImage.style.transform = `scale(${scale}) rotate(${rotation}deg)`; 
+            }
+        }
+
+        // --- 프로필 관리 스크립트 ---
+        let newProfileImageBase64 = null;
+        const modal = document.getElementById('accountModal');
+        const logoutModal = document.getElementById('logoutConfirmModal');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+
+        window.onload = function() {
+            if (!localStorage.getItem('userId')) {
+                localStorage.setItem('userId', 'capstone_user');
+                localStorage.setItem('userName', '김캡스톤');
+                localStorage.setItem('profileImage', PLACEHOLDER_IMAGE_URL);
+            }
+            updateProfileDisplay();
+            updateMemoryUsage();
+        };
+
+        function updateProfileDisplay() {
+            const profileImage = localStorage.getItem('profileImage');
+            const userId = localStorage.getItem('userId');
+            document.getElementById('mainProfileImg').src = profileImage;
+            document.getElementById('headerUserId').textContent = userId;
+        }
+        
+        function showToast(message) {
+            toastMessage.textContent = message;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => { toast.classList.add('opacity-0'); }, 3000);
+        }
+
+        function openModal() {
+            document.getElementById('userId').value = localStorage.getItem('userId');
+            document.getElementById('userName').value = localStorage.getItem('userName');
+            document.getElementById('profilePreview').src = localStorage.getItem('profileImage') || PLACEHOLDER_IMAGE_URL;
+            newProfileImageBase64 = null;
+            document.getElementById('verifyId').value = '';
+            document.getElementById('verifyName').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('verifySection').classList.remove('hidden');
+            document.getElementById('newPasswordSection').classList.add('hidden');
+            showTab('profile');
+            modal.classList.remove('modal-hidden');
+            modal.classList.add('modal-visible');
+        }
+
+        function closeModal() { modal.classList.add('modal-hidden'); modal.classList.remove('modal-visible'); }
+        function openLogoutModal() { logoutModal.classList.remove('modal-hidden'); logoutModal.classList.add('modal-visible'); }
+        function closeLogoutModal() { logoutModal.classList.add('modal-hidden'); logoutModal.classList.remove('modal-visible'); }
+        
+        modal.addEventListener('click', (event) => { if (event.target === modal) { closeModal(); } });
+
+        function showTab(tabName) {
+            ['profile', 'password'].forEach(tab => {
+                document.getElementById(`tab-${tab}`).classList.toggle('hidden', tab !== tabName);
+                const btn = document.getElementById(`tab-${tab}-btn`);
+                if (tab === tabName) { btn.classList.add('bg-blue-100', 'text-blue-600'); btn.classList.remove('text-gray-600', 'hover:bg-gray-200'); } 
+                else { btn.classList.remove('bg-blue-100', 'text-blue-600'); btn.classList.add('text-gray-600', 'hover:bg-gray-200'); }
+            });
+        }
+
+        function previewImage(event) {
+            if (!event.target.files || !event.target.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('profilePreview').src = e.target.result;
+                newProfileImageBase64 = e.target.result;
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+        
+        function deleteProfileImage() {
+            document.getElementById('profilePreview').src = PLACEHOLDER_IMAGE_URL;
+            document.getElementById('photoInput').value = ''; // Clear file input
+            newProfileImageBase64 = 'deleted';
+        }
+
+        function submitProfile() {
+            const userId = document.getElementById('userId').value.trim();
+            const userName = document.getElementById('userName').value.trim();
+            if (!userId || !userName) { showToast('❌ 사용자 ID와 이름은 비워둘 수 없습니다.'); return; }
+            localStorage.setItem('userId', userId);
+            localStorage.setItem('userName', userName);
+            
+            if (newProfileImageBase64 === 'deleted') {
+                localStorage.setItem('profileImage', PLACEHOLDER_IMAGE_URL);
+            } else if (newProfileImageBase64) {
+                localStorage.setItem('profileImage', newProfileImageBase64);
+            }
+            
+            updateProfileDisplay();
+            showToast('✅ 프로필 정보가 성공적으로 저장되었습니다.');
+            closeModal();
+        }
+
+        function verifyUser() {
+            const verifyId = document.getElementById('verifyId').value;
+            const verifyName = document.getElementById('verifyName').value;
+            if (verifyId === localStorage.getItem('userId') && verifyName === localStorage.getItem('userName')) {
+                showToast('✅ 본인 확인이 완료되었습니다.');
+                document.getElementById('verifySection').classList.add('hidden');
+                document.getElementById('newPasswordSection').classList.remove('hidden');
+            } else { showToast('❌ 아이디 또는 이름이 일치하지 않습니다.'); }
+        }
+
+        function submitNewPassword() {
+            const newPwd = document.getElementById('newPassword').value;
+            const confirmPwd = document.getElementById('confirmPassword').value;
+            if (newPwd.length < 6) { showToast("비밀번호는 최소 6자 이상이어야 합니다."); return; }
+            if (newPwd !== confirmPwd) { showToast("비밀번호가 일치하지 않습니다."); return; }
+            showToast('🔒 비밀번호가 성공적으로 변경되었습니다.');
+            closeModal();
+        }
+        
+        function logout() { openLogoutModal(); }
+
+        function confirmLogout() {
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('profileImage');
+            closeLogoutModal();
+            if(!modal.classList.contains('modal-hidden')) closeModal();
+            showToast("로그아웃 되었습니다. 잠시 후 새로고침됩니다.");
+            setTimeout(() => location.reload(), 1500);
+        }
+    </script>
+</body>
+</html>
