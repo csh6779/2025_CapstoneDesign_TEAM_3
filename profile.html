@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>프로필 관리</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .modal-transition {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .modal-hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+        .modal-visible {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto px-4">
+        <!-- 헤더 -->
+        <header class="py-4 border-b flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-600">대용량 이미지 뷰어</h1>
+            <div class="flex items-center space-x-4">
+                <span id="headerUserId" class="font-semibold text-gray-700"></span>
+                <button class="profile-btn rounded-full overflow-hidden w-12 h-12 border-2 border-gray-300 hover:border-blue-500 transition-colors" onclick="openModal()">
+                    <img src="https://placehold.co/100x100/E2E8F0/4A5568?text=User" alt="프로필" class="w-full h-full object-cover" id="mainProfileImg">
+                </button>
+            </div>
+        </header>
+
+        <!-- 메인 컨텐츠 (예시) -->
+        <main class="py-12 text-center">
+             <h2 class="text-2xl font-bold text-gray-700 mb-4">메인 컨텐츠 영역</h2>
+             <p class="text-gray-500">이곳에 이미지 뷰어의 주요 기능이 들어갑니다.</p>
+        </main>
+    </div>
+
+    <!-- 계정 관리 모달 -->
+    <div id="accountModal" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 modal-transition modal-hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-auto md:h-auto max-h-[90vh] flex flex-col md:flex-row overflow-hidden">
+            <!-- 왼쪽 메뉴 -->
+            <nav class="w-full md:w-1/4 bg-gray-50 p-6 border-r border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-8">계정 관리</h2>
+                <ul class="space-y-2">
+                    <li><button id="tab-profile-btn" onclick="showTab('profile')" class="w-full text-left px-4 py-3 rounded-lg font-semibold bg-blue-100 text-blue-600 transition-colors">개인정보 수정</button></li>
+                    <li><button id="tab-password-btn" onclick="showTab('password')" class="w-full text-left px-4 py-3 rounded-lg font-semibold text-gray-600 hover:bg-gray-200 transition-colors">비밀번호 변경</button></li>
+                </ul>
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                     <button onclick="logout()" class="w-full text-left px-4 py-3 rounded-lg font-semibold text-red-600 hover:bg-red-100 transition-colors">로그아웃</button>
+                </div>
+            </nav>
+
+            <!-- 오른쪽 컨텐츠 -->
+            <div class="w-full md:w-3/4 p-8 overflow-y-auto">
+                <!-- 개인정보 수정 탭 -->
+                <div id="tab-profile" class="">
+                    <h3 class="text-3xl font-bold text-gray-800 mb-6">개인정보 수정</h3>
+                    <div class="flex flex-col items-center mb-6">
+                        <div class="relative group w-32 h-32 mb-4">
+                             <img src="https://placehold.co/150x150/E2E8F0/4A5568?text=User" alt="프로필 사진" id="profilePreview" class="w-32 h-32 rounded-full object-cover border-4 border-gray-200">
+                             <button onclick="deleteProfileImage()" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-full text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <label for="photoInput" class="cursor-pointer bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors">
+                            이미지 변경 <input type="file" accept="image/*" id="photoInput" class="hidden" onchange="previewImage(event)">
+                        </label>
+                    </div>
+                    <div class="space-y-4">
+                        <div><label for="userId" class="block mb-1 font-semibold text-gray-600">사용자 ID</label><input type="text" id="userId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                        <div><label for="userName" class="block mb-1 font-semibold text-gray-600">사용자 이름</label><input type="text" id="userName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                    </div>
+                    <div class="flex justify-end mt-8">
+                        <button onclick="closeModal()" class="px-6 py-2 mr-2 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">취소</button>
+                        <button onclick="submitProfile()" class="px-6 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">저장하기</button>
+                    </div>
+                </div>
+
+                <!-- 비밀번호 변경 탭 -->
+                <div id="tab-password" class="hidden">
+                     <h3 class="text-3xl font-bold text-gray-800 mb-6">비밀번호 변경</h3>
+                     <div id="verifySection">
+                        <p class="text-gray-600 mb-4">보안을 위해 현재 사용자 정보를 확인합니다.</p>
+                        <div class="space-y-4">
+                            <div><label for="verifyId" class="block mb-1 font-semibold text-gray-600">현재 사용자 ID</label><input type="text" id="verifyId" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                            <div><label for="verifyName" class="block mb-1 font-semibold text-gray-600">현재 사용자 이름</label><input type="text" id="verifyName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                        </div>
+                        <div class="flex justify-end mt-8"><button onclick="verifyUser()" class="px-6 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">본인 확인</button></div>
+                    </div>
+                    <div id="newPasswordSection" class="hidden mt-8">
+                        <div class="space-y-4">
+                            <div><label for="newPassword" class="block mb-1 font-semibold text-gray-600">새 비밀번호</label><input type="password" id="newPassword" placeholder="6자 이상 입력해주세요" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                            <div><label for="confirmPassword" class="block mb-1 font-semibold text-gray-600">비밀번호 확인</label><input type="password" id="confirmPassword" placeholder="다시 한번 입력해주세요" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"></div>
+                        </div>
+                        <div class="flex justify-end mt-8">
+                            <button onclick="closeModal()" class="px-6 py-2 mr-2 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">취소</button>
+                            <button onclick="submitNewPassword()" class="px-6 py-2 rounded-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors">비밀번호 변경</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 로그아웃 확인 모달 -->
+    <div id="logoutConfirmModal" class="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 modal-transition modal-hidden">
+        <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-sm text-center">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">로그아웃</h3>
+            <p class="text-gray-600 mb-8">정말로 로그아웃 하시겠습니까?</p>
+            <div class="flex justify-center space-x-4">
+                <button onclick="closeLogoutModal()" class="px-6 py-2 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">취소</button>
+                <button onclick="confirmLogout()" class="px-6 py-2 rounded-lg font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors">로그아웃</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 알림 메시지 (Toast) -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 transition-opacity duration-300"><p id="toast-message"></p></div>
+
+    <script>
+        const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/150x150/E2E8F0/4A5568?text=User';
+        let newProfileImageBase64 = null;
+        const modal = document.getElementById('accountModal');
+        const logoutModal = document.getElementById('logoutConfirmModal');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+
+        window.onload = function() {
+            // 페이지 로드 시 localStorage에 기본 사용자 정보가 없으면 설정
+            if (!localStorage.getItem('userId')) {
+                localStorage.setItem('userId', 'capstone_user');
+                localStorage.setItem('userName', '김캡스톤');
+                localStorage.setItem('profileImage', PLACEHOLDER_IMAGE_URL);
+            }
+            updateProfileDisplay();
+        };
+
+        function updateProfileDisplay() {
+            const profileImage = localStorage.getItem('profileImage');
+            const userId = localStorage.getItem('userId');
+            // 메인 화면의 프로필 이미지와 사용자 ID 업데이트
+            document.getElementById('mainProfileImg').src = profileImage;
+            document.getElementById('headerUserId').textContent = userId;
+        }
+        
+        function showToast(message) {
+            toastMessage.textContent = message;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => { toast.classList.add('opacity-0'); }, 3000);
+        }
+
+        function openModal() {
+            // 모달을 열 때 localStorage에서 최신 정보를 가져와 UI에 채움
+            document.getElementById('userId').value = localStorage.getItem('userId');
+            document.getElementById('userName').value = localStorage.getItem('userName');
+            document.getElementById('profilePreview').src = localStorage.getItem('profileImage') || PLACEHOLDER_IMAGE_URL;
+            newProfileImageBase64 = null; // 이미지 변경 추적 초기화
+
+            // 비밀번호 변경 탭 필드 초기화
+            document.getElementById('verifyId').value = '';
+            document.getElementById('verifyName').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('verifySection').classList.remove('hidden');
+            document.getElementById('newPasswordSection').classList.add('hidden');
+
+            showTab('profile'); // 항상 첫 번째 탭을 기본으로 표시
+            modal.classList.remove('modal-hidden');
+            modal.classList.add('modal-visible');
+        }
+
+        function closeModal() { modal.classList.add('modal-hidden'); modal.classList.remove('modal-visible'); }
+        function openLogoutModal() { logoutModal.classList.remove('modal-hidden'); logoutModal.classList.add('modal-visible'); }
+        function closeLogoutModal() { logoutModal.classList.add('modal-hidden'); logoutModal.classList.remove('modal-visible'); }
+        
+        // 모달 바깥 영역 클릭 시 닫기
+        modal.addEventListener('click', (event) => { if (event.target === modal) { closeModal(); } });
+
+        function showTab(tabName) {
+            ['profile', 'password'].forEach(tab => {
+                document.getElementById(`tab-${tab}`).classList.toggle('hidden', tab !== tabName);
+                const btn = document.getElementById(`tab-${tab}-btn`);
+                if (tab === tabName) {
+                    btn.classList.add('bg-blue-100', 'text-blue-600');
+                    btn.classList.remove('text-gray-600', 'hover:bg-gray-200');
+                } else {
+                    btn.classList.remove('bg-blue-100', 'text-blue-600');
+                    btn.classList.add('text-gray-600', 'hover:bg-gray-200');
+                }
+            });
+        }
+
+        function previewImage(event) {
+            if (!event.target.files || !event.target.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('profilePreview').src = e.target.result;
+                newProfileImageBase64 = e.target.result; // 이미지가 변경되었음을 기록
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+        
+        function deleteProfileImage() {
+            document.getElementById('profilePreview').src = PLACEHOLDER_IMAGE_URL;
+            document.getElementById('photoInput').value = ''; // 파일 입력 초기화
+            newProfileImageBase64 = 'deleted'; // 이미지 삭제를 기록
+        }
+
+        function submitProfile() {
+            const userId = document.getElementById('userId').value.trim();
+            const userName = document.getElementById('userName').value.trim();
+            if (!userId || !userName) {
+                showToast('❌ 사용자 ID와 이름은 비워둘 수 없습니다.');
+                return;
+            }
+            localStorage.setItem('userId', userId);
+            localStorage.setItem('userName', userName);
+            
+            // 이미지 변경 사항 적용
+            if (newProfileImageBase64 === 'deleted') {
+                localStorage.setItem('profileImage', PLACEHOLDER_IMAGE_URL);
+            } else if (newProfileImageBase64) {
+                localStorage.setItem('profileImage', newProfileImageBase64);
+            }
+            
+            updateProfileDisplay();
+            showToast('✅ 프로필 정보가 성공적으로 저장되었습니다.');
+            closeModal();
+        }
+
+        function verifyUser() {
+            const verifyId = document.getElementById('verifyId').value;
+            const verifyName = document.getElementById('verifyName').value;
+            if (verifyId === localStorage.getItem('userId') && verifyName === localStorage.getItem('userName')) {
+                showToast('✅ 본인 확인이 완료되었습니다.');
+                document.getElementById('verifySection').classList.add('hidden');
+                document.getElementById('newPasswordSection').classList.remove('hidden');
+            } else {
+                showToast('❌ 아이디 또는 이름이 일치하지 않습니다.');
+            }
+        }
+
+        function submitNewPassword() {
+            const newPwd = document.getElementById('newPassword').value;
+            const confirmPwd = document.getElementById('confirmPassword').value;
+            if (newPwd.length < 6) {
+                showToast("비밀번호는 최소 6자 이상이어야 합니다.");
+                return;
+            }
+            if (newPwd !== confirmPwd) {
+                showToast("비밀번호가 일치하지 않습니다.");
+                return;
+            }
+            // 실제 비밀번호 변경 로직은 여기에 추가 (예: 서버 API 호출)
+            showToast('🔒 비밀번호가 성공적으로 변경되었습니다.');
+            closeModal();
+        }
+        
+        function logout() {
+            openLogoutModal();
+        }
+
+        function confirmLogout() {
+            // 모든 사용자 정보 삭제
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('profileImage');
+            
+            // 모달 닫기
+            closeLogoutModal();
+            if(!modal.classList.contains('modal-hidden')) {
+                closeModal();
+            }
+
+            showToast("로그아웃 되었습니다. 잠시 후 새로고침됩니다.");
+            // 1.5초 후 페이지 새로고침
+            setTimeout(() => location.reload(), 1500);
+        }
+    </script>
+</body>
+</html>
