@@ -11,11 +11,14 @@ import shutil
 import json
 from pathlib import Path
 from typing import List, Optional
-from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Request, Response, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import numpy as np
 from PIL import Image
+
+from app.api.v1.deps.Auth import get_current_user
+from app.utils.ncsa_logger import ncsa_logger
 
 # Pillow의 decompression bomb 보호 해제 (대용량 이미지 처리)
 Image.MAX_IMAGE_PIXELS = None
@@ -79,7 +82,10 @@ def cleanup_temp_file(file_path: str):
 @router.post("/upload")
 async def upload_file(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+    request: Request,
+    response: Response,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user)
 ):
     """
     파일 업로드 및 Neuroglancer 형식으로 자동 변환
@@ -89,10 +95,17 @@ async def upload_file(
     - 청크 단위로 저장하여 메모리 효율적 처리
     """
     
-    print(f"[Upload] 파일 업로드 요청: {file.filename}")
+    print(f"[Upload] 파일 업로드 요청: {file.filename} by {current_user.UserName}")
     
     # 파일 형식 검증
     if not validate_image_file(file.filename):
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="UPLOAD_FAILED",
+            details={"filename": file.filename, "reason": "invalid_format"}
+        )
         raise HTTPException(
             status_code=400,
             detail="지원하지 않는 파일 형식입니다. PNG, JPG, TIFF만 지원합니다."
@@ -103,10 +116,12 @@ async def upload_file(
     
     try:
         # 파일 저장
+        content = await file.read()
+        file_size = len(content)
+        
         with open(upload_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
-        print(f"[Upload] 파일 저장 완료: {len(content)} bytes")
+        print(f"[Upload] 파일 저장 완료: {file_size} bytes")
         
         # 볼륨 설정
         volume_name = Path(file.filename).stem
@@ -116,7 +131,6 @@ async def upload_file(
         print(f"[Upload] 볼륨 경로: {volume_path}")
         
         # Precomputed 형식으로 변환 (간단한 구현)
-        # 실제로는 precomputed_writer 모듈을 사용해야 합니다
         print("[Upload] Precomputed 형식으로 변환 시작...")
         
         # 이미지 로드
@@ -129,6 +143,11 @@ async def upload_file(
         # info 파일 생성
         height, width = img_array.shape[:2]
         num_channels = 1 if len(img_array.shape) == 2 else img_array.shape[2]
+        
+        # 청크 수 계산
+        chunks_x = (width + CHUNK_SIZE - 1) // CHUNK_SIZE
+        chunks_y = (height + CHUNK_SIZE - 1) // CHUNK_SIZE
+        total_chunks = chunks_x * chunks_y
         
         info = {
             "@type": "neuroglancer_multiscale_volume",
@@ -156,6 +175,49 @@ async def upload_file(
         # 백그라운드에서 임시 파일 정리
         background_tasks.add_task(cleanup_temp_file, upload_path)
         
+        # 업로드 성공 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="VOLUME_UPLOAD",
+            details={
+                "volume_name": volume_name,
+                "file_size": file_size,
+                "dimensions": f"{width}x{height}",
+                "chunks": total_chunks
+            }
+        )
+        
+        # 사용자 활동 로깅
+        ncsa_logger.log_activity(
+            username=current_user.UserName,
+            activity="IMAGE_UPLOADED",
+            status="SUCCESS",
+            details={
+                "filename": file.filename,
+                "volume": volume_name,
+                "size_bytes": file_size,
+                "width": width,
+                "height": height,
+                "chunks": total_chunks
+            }
+        )
+        
+        # 청크 분리 활동 로깅
+        ncsa_logger.log_activity(
+            username=current_user.UserName,
+            activity="CHUNK_SPLIT",
+            status="SUCCESS",
+            details={
+                "volume": volume_name,
+                "chunk_size": CHUNK_SIZE,
+                "total_chunks": total_chunks,
+                "chunks_x": chunks_x,
+                "chunks_y": chunks_y
+            }
+        )
+        
         return JSONResponse(content={
             "message": "파일이 성공적으로 업로드되고 변환되었습니다.",
             "volume_name": volume_name,
@@ -163,7 +225,8 @@ async def upload_file(
             "neuroglancer_url": f"precomputed://http://localhost:8000/precomp/{volume_name}",
             "dimensions": [width, height, 1],
             "num_channels": num_channels,
-            "chunk_size": CHUNK_SIZE
+            "chunk_size": CHUNK_SIZE,
+            "total_chunks": total_chunks
         })
         
     except Exception as e:
@@ -174,6 +237,28 @@ async def upload_file(
         print(f"[Upload ERROR] {str(e)}")
         import traceback
         traceback.print_exc()
+        
+        # 업로드 실패 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="UPLOAD_ERROR",
+            details={
+                "filename": file.filename,
+                "error": str(e)
+            }
+        )
+        
+        ncsa_logger.log_activity(
+            username=current_user.UserName,
+            activity="IMAGE_UPLOAD_FAILED",
+            status="FAILED",
+            details={
+                "filename": file.filename,
+                "error": str(e)
+            }
+        )
         
         return JSONResponse(
             status_code=500,
@@ -186,7 +271,11 @@ async def upload_file(
 
 
 @router.get("/volumes")
-def list_volumes():
+async def list_volumes(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     사용 가능한 볼륨 목록 반환
     
@@ -217,9 +306,25 @@ def list_volumes():
                             "chunk_size": info['scales'][0]['chunk_sizes'][0] if 'scales' in info else None
                         })
         
+        # 볼륨 목록 조회 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="LIST_VOLUMES",
+            details={"volume_count": len(volumes)}
+        )
+        
         return JSONResponse(content={"volumes": volumes, "count": len(volumes)})
     
     except Exception as e:
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="LIST_VOLUMES_ERROR",
+            details={"error": str(e)}
+        )
         raise HTTPException(
             status_code=500,
             detail=f"볼륨 목록 조회 실패: {str(e)}"
@@ -227,7 +332,12 @@ def list_volumes():
 
 
 @router.get("/volumes/{volume_name}/info")
-def get_volume_info(volume_name: str):
+async def get_volume_info(
+    volume_name: str,
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     특정 볼륨의 상세 정보 반환
     
@@ -238,6 +348,13 @@ def get_volume_info(volume_name: str):
         info_path = os.path.join(volume_path, "info")
         
         if not os.path.exists(info_path):
+            await ncsa_logger.log_request(
+                request=request,
+                response=response,
+                auth_user=current_user.UserName,
+                activity_type="VOLUME_NOT_FOUND",
+                details={"volume_name": volume_name}
+            )
             raise HTTPException(
                 status_code=404,
                 detail="볼륨을 찾을 수 없습니다."
@@ -245,6 +362,26 @@ def get_volume_info(volume_name: str):
         
         with open(info_path, "r", encoding="utf-8") as f:
             info = json.load(f)
+        
+        # 볼륨 정보 조회 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="VIEW_VOLUME_INFO",
+            details={"volume_name": volume_name}
+        )
+        
+        # 이미지 열기 활동 로깅
+        ncsa_logger.log_activity(
+            username=current_user.UserName,
+            activity="IMAGE_VIEW",
+            status="SUCCESS",
+            details={
+                "volume": volume_name,
+                "dimensions": info['scales'][0]['size'] if 'scales' in info else None
+            }
+        )
         
         return JSONResponse(content={
             "volume_name": volume_name,
@@ -256,6 +393,13 @@ def get_volume_info(volume_name: str):
     except HTTPException:
         raise
     except Exception as e:
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="VIEW_VOLUME_ERROR",
+            details={"volume_name": volume_name, "error": str(e)}
+        )
         raise HTTPException(
             status_code=500,
             detail=f"볼륨 정보 조회 중 오류가 발생했습니다: {str(e)}"
@@ -263,7 +407,13 @@ def get_volume_info(volume_name: str):
 
 
 @router.delete("/volumes/{volume_name}")
-def delete_volume(volume_name: str, background_tasks: BackgroundTasks):
+async def delete_volume(
+    volume_name: str, 
+    background_tasks: BackgroundTasks,
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     볼륨 삭제
     
@@ -272,6 +422,13 @@ def delete_volume(volume_name: str, background_tasks: BackgroundTasks):
     try:
         volume_path = os.path.join(DATA_ROOT, volume_name)
         if not os.path.exists(volume_path):
+            await ncsa_logger.log_request(
+                request=request,
+                response=response,
+                auth_user=current_user.UserName,
+                activity_type="DELETE_VOLUME_FAILED",
+                details={"volume_name": volume_name, "reason": "not_found"}
+            )
             raise HTTPException(
                 status_code=404,
                 detail="볼륨을 찾을 수 없습니다."
@@ -280,6 +437,22 @@ def delete_volume(volume_name: str, background_tasks: BackgroundTasks):
         # 백그라운드에서 삭제
         background_tasks.add_task(shutil.rmtree, volume_path)
         
+        # 볼륨 삭제 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="VOLUME_DELETE",
+            details={"volume_name": volume_name}
+        )
+        
+        ncsa_logger.log_activity(
+            username=current_user.UserName,
+            activity="VOLUME_DELETED",
+            status="SUCCESS",
+            details={"volume": volume_name}
+        )
+        
         return JSONResponse(content={
             "message": f"볼륨 '{volume_name}'이 삭제 대기열에 추가되었습니다."
         })
@@ -287,6 +460,13 @@ def delete_volume(volume_name: str, background_tasks: BackgroundTasks):
     except HTTPException:
         raise
     except Exception as e:
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="DELETE_VOLUME_ERROR",
+            details={"volume_name": volume_name, "error": str(e)}
+        )
         raise HTTPException(
             status_code=500,
             detail=f"볼륨 삭제 중 오류가 발생했습니다: {str(e)}"
@@ -294,12 +474,26 @@ def delete_volume(volume_name: str, background_tasks: BackgroundTasks):
 
 
 @router.get("/test-upload")
-def test_upload_setup():
+async def test_upload_setup(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     업로드 설정 테스트
     
     - 디렉터리 상태 및 설정 확인용
     """
+    
+    # 테스트 요청 로깅
+    await ncsa_logger.log_request(
+        request=request,
+        response=response,
+        auth_user=current_user.UserName,
+        activity_type="TEST_UPLOAD_CONFIG",
+        details={"action": "check_setup"}
+    )
+    
     return JSONResponse(content={
         "upload_dir": UPLOAD_DIR,
         "data_root": DATA_ROOT,

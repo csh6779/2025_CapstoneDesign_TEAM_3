@@ -1,72 +1,152 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+# app/api/v1/endpoints/Auth.py
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from typing import Annotated
+from datetime import datetime, timezone, timedelta
+from jose import jwt
 
 from app.database.database import get_db
-from app.core.Jwt import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-from app.repositories import UserRepository
-from app.schemas.Users import Token
+from app.repositories.user import UserRepository
+from app.schemas.Users import Token, User as UserOut
+from app.core.Jwt import create_access_token, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.api.v1.deps.Auth import get_current_user
+from app.utils.ncsa_logger import ncsa_logger
 
-router = APIRouter(
-    prefix="/auth",
-    tags=["Authentication"],
-    responses={401: {"description": "Authentication Failed"}},
-)
 
-def authenticate_user(db: Session, login_id: str, password: str):
-    """
-    사용자 ID와 비밀번호를 검증합니다.
-    """
-    user_repo = UserRepository(db)
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+# /v1 프리픽스 기준 token 엔드포인트 경로와 일치하게!
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token")
+
+repo = UserRepository()
+
+@router.get("/me", response_model=UserOut)
+async def read_me(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
+    # 내 정보 확인 로깅
+    await ncsa_logger.log_request(
+        request=request,
+        response=response,
+        auth_user=current_user.UserName,
+        activity_type="CHECK_AUTH",
+        details={"user_id": current_user.id}
+    )
     
-    # LoginId로 사용자 조회
-    user = user_repo.get_user_by_login_id(login_id)
-    if not user:
-        return None
-    
-    # PasswordHash와 입력된 비밀번호 비교
-    if not user_repo.verify_password(password, user.PasswordHash):
-        return None
-        
-    return user
+    return current_user
 
 @router.post("/token", response_model=Token)
 async def login_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(), 
-    db: Session = Depends(get_db)
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
-    """
-    로그인을 처리하고 JWT Access Token을 발급합니다.
-    
-    - OAuth2PasswordRequestForm은 username과 password 필드를 사용합니다
-    - username 필드에 LoginId를 입력해야 합니다
-    """
-    # 1. 사용자 인증
-    user = authenticate_user(
-        db, 
-        login_id=form_data.username,  # OAuth2PasswordRequestForm은 username 필드 사용
-        password=form_data.password
-    )
+    user = repo.authenticate_user(db, login_id=form_data.username, password=form_data.password)
     
     if not user:
-        # 인증 실패 시 401 Unauthorized 반환
+        # 로그인 실패 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            activity_type="LOGIN_FAILED",
+            details={"login_id": form_data.username, "reason": "invalid_credentials"}
+        )
+        
+        # 실패 활동 로깅 (사용자명이 아닌 시도한 로그인 ID로)
+        ncsa_logger.log_activity(
+            username="anonymous",
+            activity="LOGIN_ATTEMPT_FAILED",
+            status="FAILED",
+            details={
+                "attempted_login_id": form_data.username,
+                "remote_host": request.client.host if request.client else "unknown"
+            }
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # 2. 토큰 생성 (Payload에 User ID와 Role을 넣습니다)
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
     access_token = create_access_token(
-        data={"sub": str(user.id), "Role": user.Role},
-        expires_delta=access_token_expires
+        subject=str(user.id),  # 모델 컬럼 대소문자 주의(Id -> id로 수정)
+        role=getattr(user, "Role", None),
+        expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES,
     )
     
-    # 3. 토큰 응답
-    return {
-        "AccessToken": access_token, 
-        "TokenType": "bearer",
-        "ExpiresInMin": ACCESS_TOKEN_EXPIRE_MINUTES
-    }
+    token = Token(
+        AccessToken=access_token,
+        TokenType="bearer",
+        ExpiresInMin=ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+    
+    # 로그인 성공 로깅
+    await ncsa_logger.log_request(
+        request=request,
+        response=response,
+        auth_user=user.UserName,
+        activity_type="LOGIN",
+        details={
+            "user_id": user.id,
+            "login_id": user.LoginId,
+            "role": user.Role
+        }
+    )
+    
+    # 사용자별 활동 로깅
+    ncsa_logger.log_activity(
+        username=user.UserName,
+        activity="LOGIN_SUCCESS",
+        status="SUCCESS",
+        details={
+            "remote_host": request.client.host if request.client else "unknown",
+            "token_expires_min": ACCESS_TOKEN_EXPIRE_MINUTES
+        }
+    )
+    
+    return token.model_dump(by_alias=True)
+
+# 토큰 리프레시
+@router.post("/refresh", response_model=Token)
+async def refresh_token(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
+    new_token = create_access_token(
+        subject=str(current_user.id),
+        role=getattr(current_user, "Role", None),
+        expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+    
+    token = Token(
+        AccessToken=new_token,
+        TokenType="bearer",
+        ExpiresInMin=ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+    
+    # 토큰 리프레시 로깅
+    await ncsa_logger.log_request(
+        request=request,
+        response=response,
+        auth_user=current_user.UserName,
+        activity_type="TOKEN_REFRESH",
+        details={
+            "user_id": current_user.id,
+            "token_expires_min": ACCESS_TOKEN_EXPIRE_MINUTES
+        }
+    )
+    
+    ncsa_logger.log_activity(
+        username=current_user.UserName,
+        activity="TOKEN_REFRESHED",
+        status="SUCCESS",
+        details={"token_expires_min": ACCESS_TOKEN_EXPIRE_MINUTES}
+    )
+    
+    return token.model_dump(by_alias=True)

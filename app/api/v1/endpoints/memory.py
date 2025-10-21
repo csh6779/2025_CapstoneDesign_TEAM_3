@@ -8,9 +8,12 @@
 
 import os
 import psutil
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Response, Depends
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
+
+from app.api.v1.deps.Auth import get_current_user
+from app.utils.ncsa_logger import ncsa_logger
 
 router = APIRouter()
 
@@ -30,7 +33,11 @@ def get_memory_info() -> Dict[str, Any]:
 
 
 @router.get("/memory-status")
-def get_memory_status():
+async def get_memory_status(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     메모리 상태 조회
     
@@ -40,6 +47,18 @@ def get_memory_status():
     """
     try:
         memory_info = get_memory_info()
+        
+        # 메모리 상태 조회 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="VIEW_MEMORY_STATUS",
+            details={
+                "process_mb": round(memory_info["process_mb"], 2),
+                "system_percent": round(memory_info["system_percent"], 1)
+            }
+        )
         
         return JSONResponse(content={
             "memory": memory_info,
@@ -62,7 +81,11 @@ def get_memory_status():
 
 
 @router.post("/memory-cleanup")
-def memory_cleanup():
+async def memory_cleanup(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     강제 메모리 정리
     
@@ -77,6 +100,28 @@ def memory_cleanup():
         
         # 메모리 정보 조회
         memory_after = get_memory_info()
+        
+        # 메모리 정리 활동 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="MEMORY_CLEANUP",
+            details={
+                "freed_objects": freed_objects,
+                "memory_mb_after": round(memory_after["process_mb"], 2)
+            }
+        )
+        
+        ncsa_logger.log_activity(
+            username=current_user.UserName,
+            activity="MEMORY_CLEANED",
+            status="SUCCESS",
+            details={
+                "freed_objects": freed_objects,
+                "process_mb": round(memory_after["process_mb"], 2)
+            }
+        )
         
         return JSONResponse(content={
             "message": "메모리 정리 완료",
@@ -93,7 +138,11 @@ def memory_cleanup():
 
 
 @router.get("/system-info")
-def get_system_info():
+async def get_system_info(
+    request: Request,
+    response: Response,
+    current_user=Depends(get_current_user)
+):
     """
     시스템 정보 조회
     
@@ -105,6 +154,18 @@ def get_system_info():
         cpu_percent = psutil.cpu_percent(interval=1)
         disk_usage = psutil.disk_usage('/')
         process = psutil.Process(os.getpid())
+        
+        # 시스템 정보 조회 로깅
+        await ncsa_logger.log_request(
+            request=request,
+            response=response,
+            auth_user=current_user.UserName,
+            activity_type="VIEW_SYSTEM_INFO",
+            details={
+                "cpu_percent": cpu_percent,
+                "disk_percent": disk_usage.percent
+            }
+        )
         
         return JSONResponse(content={
             "cpu": {

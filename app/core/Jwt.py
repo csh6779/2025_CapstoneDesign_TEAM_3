@@ -31,14 +31,30 @@ def get_password_hash(password: str) -> str:
 # JWT Functions
 # -----------------
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    subject: str = None,
+    role: str = None,
+    data: dict = None,
+    expires_delta: timedelta = None,
+    expires_minutes: int = None
+) -> str:
     """
     JWT Access Token을 생성합니다.
     Payload에는 주로 sub (Subject, 사용자 ID)와 exp (Expiration, 만료 시간)가 포함됩니다.
     """
-    to_encode = data.copy()
+    to_encode = data.copy() if data else {}
+    
+    # subject와 role이 제공된 경우 추가
+    if subject:
+        to_encode["sub"] = subject
+    if role:
+        to_encode["role"] = role
+    
+    # 만료 시간 계산
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
+    elif expires_minutes:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
     else:
         # 기본 만료 시간 적용
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -49,6 +65,17 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     # JWT 인코딩
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def decode_token(token: str) -> dict:
+    """
+    JWT 토큰을 디코딩하여 payload를 반환합니다.
+    """
+    from jose import JWTError
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError as e:
+        raise JWTError(f"Invalid token: {str(e)}")
 
 # -----------------
 # Dependency Function (Authorization)

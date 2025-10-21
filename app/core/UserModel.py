@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import relationship
 from app.database.database import Base
 
@@ -10,7 +11,7 @@ class User(Base):
     PasswordHash = Column(String(255), nullable=False)
     UserName = Column(String(30), nullable=False)
     Role = Column(String(10), nullable=True, default="user")
-    UserImage = Column(String(255), nullable=True)
+    UserImage = Column(MEDIUMTEXT, nullable=True)  # Base64 이미지 저장 (최대 16MB)
 
     # ImageLog와의 관계 (1:N)
     image_logs = relationship(

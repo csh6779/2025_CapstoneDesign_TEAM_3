@@ -6,7 +6,7 @@ class UserBase(BaseModel):
     LoginId: str = Field(..., min_length=1, max_length=50, example="user123")
     UserName: str = Field(..., min_length=1, max_length=30, example="홍길동")
     Role: Optional[str] = Field(default="user", max_length=10, example="user")
-    UserImage: Optional[str] = Field(default=None, max_length=255, example="profile.jpg")
+    UserImage: Optional[str] = Field(default=None, description="Base64 인코딩된 프로필 사진 (최대 16MB)", example="data:image/png;base64,iVBORw0KG...")
 
 # Create Schema: 사용자 생성 요청 시 클라이언트로부터 받는 데이터
 class UserCreate(BaseModel):
@@ -14,7 +14,7 @@ class UserCreate(BaseModel):
     Password: str = Field(..., min_length=8, example="password123")
     UserName: str = Field(..., min_length=1, max_length=30, example="홍길동")
     Role: Optional[str] = Field(default="user", max_length=10, example="user")
-    UserImage: Optional[str] = Field(default=None, max_length=255, example="profile.jpg")
+    UserImage: Optional[str] = Field(default=None, description="Base64 인코딩된 프로필 사진 (최대 16MB)", example="data:image/png;base64,iVBORw0KG...")
 
 # Update Schema: 사용자 정보 업데이트 요청 시 클라이언트로부터 받는 데이터 (모두 선택적)
 class UserUpdate(BaseModel):
@@ -22,7 +22,7 @@ class UserUpdate(BaseModel):
     Password: Optional[str] = Field(None, min_length=8)
     UserName: Optional[str] = Field(None, max_length=30)
     Role: Optional[str] = Field(None, max_length=10)
-    UserImage: Optional[str] = Field(None, max_length=255)
+    UserImage: Optional[str] = Field(None, description="Base64 인코딩된 프로필 사진 (최대 16MB)", example="data:image/png;base64,iVBORw0KG...")
 
 # Response Schema: 사용자 정보를 클라이언트에게 응답할 때 사용하는 데이터
 class User(BaseModel):

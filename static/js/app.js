@@ -1,6 +1,6 @@
 // ========== 인증 관련 변수 ==========
 let currentUser = null;
-const userDatabase = {};
+let authToken = null;
 const defaultProfilePic = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="%23adb5bd"/><path d="M12 4a4 4 0 100 8 4 4 0 000-8zM12 14c-4.42 0-8 3.58-8 8h16c0-4.42-3.58-8-8-8z" fill="%23f8f9fa"/></svg>';
 const grades = ['bronze', 'silver', 'gold'];
 
@@ -12,70 +12,171 @@ const refreshBtn = document.getElementById('refreshBtn');
 const volumesList = document.getElementById('volumesList');
 const volumeSelect = document.getElementById('volumeSelect');
 
+// ========== API 헬퍼 함수 ==========
+function getAuthHeaders() {
+    if (authToken) {
+        return {
+            'Authorization': `Bearer ${authToken}`
+        };
+    }
+    return {};
+}
+
+async function apiCall(url, options = {}) {
+    const headers = { ...getAuthHeaders(), ...options.headers };
+    const response = await fetch(url, { ...options, headers });
+    
+    if (response.status === 401) {
+        // 인증 만료 시 로그아웃
+        if (currentUser) {
+            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+            handleLogout();
+        }
+        throw new Error('Unauthorized');
+    }
+    
+    return response;
+}
+
 // ========== 인증 함수 ==========
 function toggleAuthView(type) {
     document.getElementById('login-form').style.display = type === 'login' ? 'block' : 'none';
     document.getElementById('register-form').style.display = type === 'register' ? 'block' : 'none';
 }
 
-function handleRegister() {
-    const id = document.getElementById('reg-id').value;
+async function handleRegister() {
+    const loginId = document.getElementById('reg-id').value;
     const password = document.getElementById('reg-password').value;
-    const name = document.getElementById('reg-name').value;
+    const userName = document.getElementById('reg-name').value;
     const profileFileInput = document.getElementById('reg-profile-pic');
     const file = profileFileInput.files[0];
 
-    if (!id || !password || !name || !file) {
-        alert('모든 정보를 입력하고 프로필 사진을 선택해 주세요.');
+    if (!loginId || !password || !userName) {
+        alert('아이디, 비밀번호, 이름을 입력해주세요.');
         return;
     }
 
-    if (userDatabase[id]) {
-        alert('이미 존재하는 아이디입니다.');
-        return;
+    let userImageBase64 = null;
+
+    // 프로필 사진이 선택된 경우 Base64로 변환
+    if (file) {
+        try {
+            userImageBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        } catch (error) {
+            alert('프로필 사진 업로드 실패: ' + error.message);
+            return;
+        }
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        userDatabase[id] = {
-            password: password,
-            name: name,
-            profilePic: e.target.result,
-            grade: 'bronze'
-        };
-        alert('회원가입 성공! 로그인 해주세요.');
-        toggleAuthView('login');
-        document.getElementById('reg-id').value = '';
-        document.getElementById('reg-password').value = '';
-        document.getElementById('reg-name').value = '';
-        profileFileInput.value = '';
-    };
-    reader.readAsDataURL(file);
+    try {
+        const response = await fetch('/v1/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                LoginId: loginId,
+                Password: password,
+                UserName: userName,
+                Role: 'user',
+                UserImage: userImageBase64  // Base64 문자열 또는 null
+            })
+        });
+
+        if (response.ok) {
+            alert('회원가입 성공! 로그인 해주세요.');
+            toggleAuthView('login');
+            document.getElementById('reg-id').value = '';
+            document.getElementById('reg-password').value = '';
+            document.getElementById('reg-name').value = '';
+            profileFileInput.value = '';
+        } else {
+            const error = await response.json();
+            console.error('회원가입 에러:', error);
+            
+            // 에러 메시지 상세 표시
+            let errorMessage = '회원가입 실패\n\n';
+            if (error.detail) {
+                if (typeof error.detail === 'string') {
+                    errorMessage += error.detail;
+                } else if (Array.isArray(error.detail)) {
+                    errorMessage += error.detail.map(e => `- ${e.msg || e.message || JSON.stringify(e)}`).join('\n');
+                } else {
+                    errorMessage += JSON.stringify(error.detail, null, 2);
+                }
+            } else {
+                errorMessage += JSON.stringify(error, null, 2);
+            }
+            
+            alert(errorMessage);
+        }
+    } catch (error) {
+        alert(`회원가입 실패: ${error.message}`);
+    }
 }
 
-function handleLogin() {
-    const id = document.getElementById('login-id').value;
+async function handleLogin() {
+    const loginId = document.getElementById('login-id').value;
     const password = document.getElementById('login-password').value;
 
-    if (userDatabase[id] && userDatabase[id].password === password) {
-        const randomGrade = grades[Math.floor(Math.random() * grades.length)];
+    if (!loginId || !password) {
+        alert('아이디와 비밀번호를 입력해주세요.');
+        return;
+    }
 
-        currentUser = {
-            id: id,
-            name: userDatabase[id].name,
-            profilePic: userDatabase[id].profilePic,
-            grade: randomGrade
-        };
+    try {
+        // FormData로 로그인 요청
+        const formData = new URLSearchParams();
+        formData.append('username', loginId);
+        formData.append('password', password);
 
-        alert(`${currentUser.name}님, 환영합니다!`);
-        showMainView();
-    } else {
-        alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+        const response = await fetch('/v1/auth/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            authToken = data.AccessToken;
+            
+            // 사용자 정보 가져오기
+            const userResponse = await apiCall('/v1/auth/me');
+            const userData = await userResponse.json();
+            
+            // 랜덤 등급 부여 (또는 실제 등급 사용)
+            const randomGrade = grades[Math.floor(Math.random() * grades.length)];
+            
+            currentUser = {
+                id: userData.id,
+                loginId: userData.LoginId,
+                name: userData.UserName,
+                role: userData.Role,
+                profilePic: userData.UserImage || defaultProfilePic,  // Base64 또는 기본 이미지
+                grade: randomGrade
+            };
+
+            alert(`${currentUser.name}님, 환영합니다!`);
+            showMainView();
+        } else {
+            const error = await response.json();
+            alert(`로그인 실패: ${error.detail || '아이디 또는 비밀번호가 올바르지 않습니다.'}`);
+        }
+    } catch (error) {
+        alert(`로그인 실패: ${error.message}`);
     }
 }
 
 function handleLogout() {
     currentUser = null;
+    authToken = null;
     document.getElementById('main-view').style.display = 'none';
     document.getElementById('auth-view').style.display = 'block';
     alert('로그아웃 되었습니다.');
@@ -115,7 +216,7 @@ uploadBtn.addEventListener('click', async () => {
     formData.append('file', file);
 
     try {
-        const response = await fetch('/api/upload', {
+        const response = await apiCall('/api/upload', {
             method: 'POST',
             body: formData
         });
@@ -140,8 +241,10 @@ uploadBtn.addEventListener('click', async () => {
 
 // ========== 메모리 관리 ==========
 async function refreshMemoryStats() {
+    if (!authToken) return; // 로그인하지 않은 경우 스킵
+    
     try {
-        const response = await fetch('/api/memory-status');
+        const response = await apiCall('/api/memory-status');
         const stats = await response.json();
 
         document.getElementById('serverMemory').textContent =
@@ -160,7 +263,7 @@ async function refreshMemoryStats() {
 
 async function cleanupMemory() {
     try {
-        const response = await fetch('/api/memory-cleanup', {method: 'POST'});
+        const response = await apiCall('/api/memory-cleanup', {method: 'POST'});
         const result = await response.json();
 
         alert(`메모리 정리 완료: ${result.freed_mb.toFixed(1)}MB 해제`);
@@ -181,7 +284,7 @@ async function deleteVolume(volumeName) {
     if (!confirm(`볼륨 '${volumeName}'을 삭제하시겠습니까?`)) return;
 
     try {
-        const response = await fetch(`/api/volumes/${volumeName}`, {
+        const response = await apiCall(`/api/volumes/${volumeName}`, {
             method: 'DELETE'
         });
 
@@ -212,7 +315,7 @@ function copyToClipboard(text, buttonElement) {
         }, 2000);
     }).catch(err => {
         console.error('복사 실패:', err);
-        alert('URL이 복사되었습니다!');
+        alert('URL 복사 완료!');
     });
 }
 
@@ -247,8 +350,10 @@ function openNeuroglancer(volumeName) {
 }
 
 async function loadVolumes() {
+    if (!authToken) return; // 로그인하지 않은 경우 스킵
+    
     try {
-        const response = await fetch('/api/volumes');
+        const response = await apiCall('/api/volumes');
         const result = await response.json();
 
         if (response.ok) {
@@ -326,7 +431,7 @@ function displayVolumes(volumes) {
 // ========== 로그 관리 ==========
 async function viewLogs(logType = 'main') {
     try {
-        const response = await fetch(`/api/logs/recent?log_type=${logType}&lines=100`);
+        const response = await apiCall(`/api/logs/recent?log_type=${logType}&lines=100`);
         const result = await response.json();
 
         if (response.ok && result.logs.length > 0) {
@@ -471,12 +576,17 @@ refreshBtn.addEventListener('click', loadVolumes);
 
 // ========== 초기화 ==========
 document.addEventListener('DOMContentLoaded', () => {
+    // 로그인 화면으로 시작
     toggleAuthView('login');
+    
+    // 메인 화면 숨기기
+    document.getElementById('main-view').style.display = 'none';
+    document.getElementById('auth-view').style.display = 'block';
 });
 
 // 5초마다 메모리 상태 업데이트 (로그인 후에만)
 setInterval(() => {
-    if (currentUser && document.getElementById('main-view').style.display !== 'none') {
+    if (currentUser && authToken && document.getElementById('main-view').style.display !== 'none') {
         refreshMemoryStats();
     }
 }, 5000);

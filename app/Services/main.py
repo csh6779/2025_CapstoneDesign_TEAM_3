@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 from app.api.v1.endpoints import user as user_router_v1
-from app.api.v1.endpoints import neuroglancer, memory, logs
+from app.api.v1.endpoints import Auth, neuroglancer, memory, logs
 from app.database.database import engine, Base
 from app.core.UserModel import User
 from app.core.ImageLogModel import ImageLog
@@ -61,6 +61,9 @@ if os.path.exists(DATA_ROOT):
 # 라우터 등록
 # v1 사용자 관리 API
 app.include_router(user_router_v1.router, prefix="/v1")
+
+# v1 인증 API
+app.include_router(Auth.router, prefix="/v1")
 
 # Neuroglancer API
 app.include_router(
