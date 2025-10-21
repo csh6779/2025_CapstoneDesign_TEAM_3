@@ -6,15 +6,12 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from app.api.v1.endpoints import user as user_router_v1
 from app.api.v1.endpoints import Auth, neuroglancer, memory, logs
-from app.database.database import engine, Base
-from app.core.UserModel import User
-from app.core.ImageLogModel import ImageLog
-from fastapi.middleware.cors import CORSMiddleware
 from app.utils.file_logger import FileLogger
 import os
 import time
 
-Base.metadata.create_all(bind=engine)
+# 데이터베이스 자동 초기화 (Base.metadata.create_all 대체)
+from app.database.init_db import init_database
 
 # FastAPI 애플리케이션 생성
 app = FastAPI(
@@ -24,6 +21,7 @@ app = FastAPI(
 )
 
 # CORS 설정 추가
+from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -119,6 +117,9 @@ def read_root():
 # 서버 시작 이벤트
 @app.on_event("startup")
 async def startup_event():
+    # 데이터베이스 초기화 (테이블 생성 및 마이그레이션)
+    init_database()
+    
     logger.log_header("Neuroglancer 대용량 뷰어 시스템 시작")
     logger.info(f"데이터 루트: {DATA_ROOT}")
     logger.info(f"정적 파일: {STATIC_DIR}")
