@@ -420,7 +420,7 @@ function displayVolumes(volumes) {
                     <button onclick="openNeuroglancer('${volume.name}')" class="btn btn-neuroglancer">
                         🧠 Neuroglancer에서 열기
                     </button>
-                    <a href="${volume.path}/info" target="_blank" class="btn btn-primary">📋 Info 보기</a>
+                    <a href="/precomp/${volume.name}/info" target="_blank" class="btn btn-primary">📋 Info 보기</a>
                     <button onclick="deleteVolume('${volume.name}')" class="btn btn-danger">🗑️ 삭제</button>
                 </div>
             </div>
@@ -510,7 +510,8 @@ async function loadVolumeInfo(volumeName) {
 }
 
 const TILE_PATTERN = (volume, lvl, x, y, z = 0) => {
-    return `/precomp/${volume}/${x}_${y}_${z}/${lvl}`;
+    // Neuroglancer 청크 경로 형식: /precomp/{volume}/{level}/{x}_{y}_{z}
+    return `/precomp/${volume}/${lvl}/${x}_${y}_${z}`;
 };
 
 async function fetchTile(url, idx) {
@@ -578,7 +579,7 @@ refreshBtn.addEventListener('click', loadVolumes);
 document.addEventListener('DOMContentLoaded', () => {
     // 로그인 화면으로 시작
     toggleAuthView('login');
-    
+
     // 메인 화면 숨기기
     document.getElementById('main-view').style.display = 'none';
     document.getElementById('auth-view').style.display = 'block';
