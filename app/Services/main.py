@@ -52,12 +52,11 @@ logger = FileLogger(
 # 정적 파일 마운트
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# precomp 디렉터리 마운트 (Neuroglancer 데이터)
-# 사용자별 폴더 구조를 지원하기 위해 uploads 전체를 마운트
+# uploads 디렉터리를 루트로 마운트 (사용자별 폴더 구조)
 if os.path.exists(DATA_ROOT):
-    app.mount("/precomp", StaticFiles(directory=DATA_ROOT), name="precomp")
-    logger.info(f"precomp 디렉터리 마운트됨: {DATA_ROOT}")
-    logger.info("사용자별 폴더 구조: /precomp/{username}/{volume_name}")
+    app.mount("/uploads", StaticFiles(directory=DATA_ROOT), name="uploads")
+    logger.info(f"uploads 디렉터리 마운트됨: {DATA_ROOT}")
+    logger.info("사용자별 폴더 구조: /uploads/{username}/{volume_name}")
 
 # 라우터 등록
 # v1 사용자 관리 API
@@ -89,43 +88,119 @@ app.include_router(
 
 # 볼륨 직접 접근을 위한 동적 라우팅
 from fastapi import HTTPException as FastAPIHTTPException
-from starlette.responses import FileResponse as StarletteFileResponse
+from starlette.responses import FileResponse as StarletteFileResponse, JSONResponse
 
 
-@app.get("/precomp/{volume_name}/info")
-async def get_volume_info_direct(volume_name: str):
+@app.get("/uploads/{username}/{volume_name}/info")
+async def get_volume_info(username: str, volume_name: str):
     """
-    볼륨 info 파일 직접 접근 (사용자 이름 자동 탐색)
+    사용자별 볼륨 info 파일 접근
+    경로: /uploads/{username}/{volume_name}/info
     """
-    # 모든 사용자 폴더에서 해당 볼륨 검색
+    logger.info(f"📂 Volume info 요청: {username}/{volume_name}")
+
+    user_path = os.path.join(DATA_ROOT, username)
+    volume_path = os.path.join(user_path, volume_name)
+    info_path = os.path.join(volume_path, "info")
+
+    logger.info(f"  🔍 Info 경로: {info_path}")
+
+    if os.path.exists(info_path):
+        logger.info(f"  ✅ Info 파일 발견")
+        return StarletteFileResponse(
+            info_path,
+            media_type="application/json"
+        )
+
+    logger.error(f"  ❌ Info 파일 없음")
+
+    # 디버깅 정보 제공
+    available_volumes = []
+    if os.path.exists(DATA_ROOT):
+        for user in os.listdir(DATA_ROOT):
+            user_dir = os.path.join(DATA_ROOT, user)
+            if os.path.isdir(user_dir):
+                for vol in os.listdir(user_dir):
+                    vol_dir = os.path.join(user_dir, vol)
+                    if os.path.isdir(vol_dir):
+                        available_volumes.append(f"{user}/{vol}")
+
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "Volume info not found",
+            "requested": f"{username}/{volume_name}",
+            "info_path": info_path,
+            "available_volumes": available_volumes
+        }
+    )
+
+
+@app.get("/uploads/{username}/{volume_name}/{scale_key}/{chunk_file}")
+async def get_volume_chunk(username: str, volume_name: str, scale_key: str, chunk_file: str):
+    """
+    사용자별 볼륨 청크 파일 접근
+    경로: /uploads/{username}/{volume_name}/{scale_key}/{chunk_file}
+    """
+    logger.info(f"📦 Chunk 요청: {username}/{volume_name}/{scale_key}/{chunk_file}")
+
+    user_path = os.path.join(DATA_ROOT, username)
+    volume_path = os.path.join(user_path, volume_name)
+    chunk_path = os.path.join(volume_path, scale_key, chunk_file)
+
+    if os.path.exists(chunk_path):
+        logger.info(f"  ✅ Chunk 발견: {chunk_path}")
+        return StarletteFileResponse(chunk_path)
+
+    logger.error(f"  ❌ Chunk 없음: {chunk_path}")
+    raise FastAPIHTTPException(
+        status_code=404,
+        detail=f"Chunk file not found: {username}/{volume_name}/{scale_key}/{chunk_file}"
+    )
+
+
+# 디버깅용: 사용 가능한 모든 볼륨 목록 조회
+@app.get("/api/volumes/list")
+async def list_all_volumes():
+    """
+    모든 사용자의 볼륨 목록 조회 (디버깅용)
+    """
+    volumes = {}
+
     if os.path.exists(DATA_ROOT):
         for username in os.listdir(DATA_ROOT):
             user_path = os.path.join(DATA_ROOT, username)
             if os.path.isdir(user_path):
-                volume_path = os.path.join(user_path, volume_name)
-                info_path = os.path.join(volume_path, "info")
-                if os.path.exists(info_path):
-                    return StarletteFileResponse(info_path)
+                user_volumes = []
+                for volume_name in os.listdir(user_path):
+                    volume_path = os.path.join(user_path, volume_name)
+                    if os.path.isdir(volume_path):
+                        info_path = os.path.join(volume_path, "info")
+                        has_info = os.path.exists(info_path)
 
-    raise FastAPIHTTPException(status_code=404, detail="Volume info not found")
+                        # 스케일 디렉터리 확인
+                        scales = []
+                        for item in os.listdir(volume_path):
+                            item_path = os.path.join(volume_path, item)
+                            if os.path.isdir(item_path) and item != "temp":
+                                scales.append(item)
 
+                        user_volumes.append({
+                            "name": volume_name,
+                            "path": f"/uploads/{username}/{volume_name}",
+                            "has_info": has_info,
+                            "scales": scales,
+                            "neuroglancer_url": f"precomputed://http://localhost:8000/uploads/{username}/{volume_name}"
+                        })
 
-@app.get("/precomp/{volume_name}/{scale_key}/{chunk_file}")
-async def get_volume_chunk_direct(volume_name: str, scale_key: str, chunk_file: str):
-    """
-    볼륨 청크 파일 직접 접근 (사용자 이름 자동 탐색)
-    """
-    # 모든 사용자 폴더에서 해당 볼륨 검색
-    if os.path.exists(DATA_ROOT):
-        for username in os.listdir(DATA_ROOT):
-            user_path = os.path.join(DATA_ROOT, username)
-            if os.path.isdir(user_path):
-                volume_path = os.path.join(user_path, volume_name)
-                chunk_path = os.path.join(volume_path, scale_key, chunk_file)
-                if os.path.exists(chunk_path):
-                    return StarletteFileResponse(chunk_path)
+                if user_volumes:
+                    volumes[username] = user_volumes
 
-    raise FastAPIHTTPException(status_code=404, detail="Chunk file not found")
+    return {
+        "data_root": DATA_ROOT,
+        "total_users": len(volumes),
+        "volumes": volumes
+    }
 
 
 # 미들웨어: 요청/응답 로깅
@@ -169,7 +244,7 @@ async def startup_event():
     logger.info(f"로그 디렉터리: {BASE_DIR / 'logs'}")
     logger.info(f"서버 주소: http://localhost:8000")
     logger.info(f"API 문서: http://localhost:8000/docs")
-    logger.info("📁 사용자별 폴더 구조: uploads/{username}/{volume_name}")
+    logger.info(f"📁 사용자별 폴더 구조: /uploads/{{username}}/{{volume_name}}")
     logger.log_separator()
 
     print("=" * 60)
@@ -179,7 +254,8 @@ async def startup_event():
     print(f"📝 로그 디렉터리: {BASE_DIR / 'logs'}")
     print(f"🌐 서버 주소: http://localhost:8000")
     print(f"📚 API 문서: http://localhost:8000/docs")
-    print(f"👥 사용자별 폴더: /precomp/{{username}}/{{volume}}")
+    print(f"👥 사용자별 폴더: /uploads/{{username}}/{{volume}}")
+    print(f"🔍 볼륨 목록: http://localhost:8000/api/volumes/list")
     print("=" * 60)
 
 
@@ -203,8 +279,9 @@ if __name__ == "__main__":
     print("🚀 FastAPI 개발 서버 시작...")
     print(f"📍 서버 주소: http://localhost:8000")
     print(f"📁 데이터 디렉터리: {DATA_ROOT}")
-    print(f"👥 사용자별 폴더 구조 사용")
+    print(f"👥 사용자별 폴더 구조: /uploads/{{username}}/{{volume}}")
     print(f"📚 API 문서: http://localhost:8000/docs")
+    print(f"🔍 볼륨 목록: http://localhost:8000/api/volumes/list")
     print("\n서버 중지하려면 Ctrl+C를 누르세요.")
     print("=" * 60 + "\n")
 

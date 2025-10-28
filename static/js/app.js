@@ -319,8 +319,9 @@ function copyToClipboard(text, buttonElement) {
     });
 }
 
-function openNeuroglancer(volumeName) {
-    const sourceUrl = `precomputed://http://localhost:8000/precomp/${volumeName}`;
+function openNeuroglancer(username, volumeName) {
+    // uploads 경로 사용: /uploads/{username}/{volumeName}
+    const sourceUrl = `precomputed://http://localhost:8000/uploads/${username}/${volumeName}`;
     const neuroglancerConfig = {
         "layers": [
             {
@@ -351,7 +352,7 @@ function openNeuroglancer(volumeName) {
 
 async function loadVolumes() {
     if (!authToken) return; // 로그인하지 않은 경우 스킵
-    
+
     try {
         const response = await apiCall('/api/volumes');
         const result = await response.json();
@@ -372,7 +373,10 @@ function displayVolumes(volumes) {
     }
 
     volumesList.innerHTML = volumes.map(volume => {
-        const sourceUrl = `precomputed://http://localhost:8000/precomp/${volume.name}`;
+        // 서버에서 보내준 URL 사용 (이미 올바른 /uploads/{username}/{volumeName} 형식)
+        const sourceUrl = volume.neuroglancer_url;
+        const username = volume.username || currentUser.name;
+
         const neuroglancerConfig = {
             "layers": [{
                 "type": "image",
@@ -417,10 +421,10 @@ function displayVolumes(volumes) {
                 </div>
 
                 <div class="volume-actions">
-                    <button onclick="openNeuroglancer('${volume.name}')" class="btn btn-neuroglancer">
+                    <button onclick="openNeuroglancer('${username}', '${volume.name}')" class="btn btn-neuroglancer">
                         🧠 Neuroglancer에서 열기
                     </button>
-                    <a href="/precomp/${volume.name}/info" target="_blank" class="btn btn-primary">📋 Info 보기</a>
+                    <a href="${volume.info_url || '/uploads/' + username + '/' + volume.name + '/info'}" target="_blank" class="btn btn-primary">📋 Info 보기</a>
                     <button onclick="deleteVolume('${volume.name}')" class="btn btn-danger">🗑️ 삭제</button>
                 </div>
             </div>
@@ -496,9 +500,10 @@ async function viewLogs(logType = 'main') {
 // ========== 타일 테스트 ==========
 let volumeInfo = null;
 
-async function loadVolumeInfo(volumeName) {
+async function loadVolumeInfo(username, volumeName) {
     try {
-        const response = await fetch(`/precomp/${volumeName}/info`);
+        // uploads 경로 사용
+        const response = await fetch(`/uploads/${username}/${volumeName}/info`);
         if (response.ok) {
             volumeInfo = await response.json();
             return volumeInfo;
@@ -509,9 +514,9 @@ async function loadVolumeInfo(volumeName) {
     return null;
 }
 
-const TILE_PATTERN = (volume, lvl, x, y, z = 0) => {
-    // Neuroglancer 청크 경로 형식: /precomp/{volume}/{level}/{x}_{y}_{z}
-    return `/precomp/${volume}/${lvl}/${x}_${y}_${z}`;
+const TILE_PATTERN = (username, volume, lvl, x, y, z = 0) => {
+    // uploads 경로 사용: /uploads/{username}/{volume}/{level}/{x}_{y}_{z}
+    return `/uploads/${username}/${volume}/${lvl}/${x}_${y}_${z}`;
 };
 
 async function fetchTile(url, idx) {
@@ -554,7 +559,8 @@ document.getElementById("startBtn").addEventListener("click", async () => {
         return;
     }
 
-    await loadVolumeInfo(volume);
+    const username = currentUser.name;  // 또는 currentUser.loginId
+    await loadVolumeInfo(username, volume);
     const level = document.getElementById("level").value.trim();
     const count = parseInt(document.getElementById("count").value, 10);
     document.getElementById("tbody").innerHTML = "";
@@ -562,7 +568,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     const tasks = [];
     let x = 0, y = 0;
     for (let i = 0; i < count; i++) {
-        const url = TILE_PATTERN(volume, level, x, y, 0);
+        const url = TILE_PATTERN(username, volume, level, x, y, 0);
         tasks.push(fetchTile(url, i));
         x++;
         if (x >= 4) { x = 0; y++; }

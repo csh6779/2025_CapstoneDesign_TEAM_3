@@ -122,8 +122,9 @@ def process_chunk_from_image(img: Image.Image, chunk_x: int, chunk_y: int,
     else:
         chunk_data = chunk_data[:, :, :, np.newaxis]
 
-    # 청크 파일명 생성 (확장자 없음)
-    chunk_filename = f"{chunk_x}_{chunk_y}_0"
+    # Neuroglancer가 기대하는 청크 파일명 형식: x_start-x_end_y_start-y_end_z_start-z_end
+    # 실제 끝 좌표를 사용 (x_end, y_end는 실제 이미지 크기로 제한됨)
+    chunk_filename = f"{x_start}-{x_end}_{y_start}-{y_end}_0-1"
 
     # 스케일별 디렉터리 생성
     scale_dir = os.path.join(volume_path, scale_key)
@@ -357,10 +358,8 @@ async def upload_file(
             "message": "파일이 성공적으로 업로드되고 변환되었습니다.",
             "volume_name": volume_name,
             "username": username,
-            "volume_path": f"/precomp/{username}/{volume_name}",
-            "volume_path_direct": f"/precomp/{volume_name}",  # 사용자 이름 없는 직접 접근
-            "neuroglancer_url": f"precomputed://http://localhost:8000/precomp/{volume_name}",  # 직접 접근 URL
-            "neuroglancer_url_full": f"precomputed://http://localhost:8000/precomp/{username}/{volume_name}",  # 전체 경로
+            "volume_path": f"/uploads/{username}/{volume_name}",
+            "neuroglancer_url": f"precomputed://http://localhost:8000/uploads/{username}/{volume_name}",
             "dimensions": [width, height, 1],
             "num_channels": num_channels,
             "chunk_size": CHUNK_SIZE,
@@ -446,9 +445,9 @@ async def list_volumes(
                         volumes.append({
                             "name": item,
                             "username": username,
-                            "path": f"/precomp/{username}/{item}",
-                            "info_url": f"/precomp/{username}/{item}/info",
-                            "neuroglancer_url": f"precomputed://http://localhost:8000/precomp/{username}/{item}",
+                            "path": f"/uploads/{username}/{item}",
+                            "info_url": f"/uploads/{username}/{item}/info",
+                            "neuroglancer_url": f"precomputed://http://localhost:8000/uploads/{username}/{item}",
                             "dimensions": info['scales'][0]['size'] if 'scales' in info else None,
                             "chunk_size": info['scales'][0]['chunk_sizes'][0] if 'scales' in info else None
                         })
@@ -537,8 +536,8 @@ async def get_volume_info(
             "volume_name": volume_name,
             "username": username,
             "info": info,
-            "volume_path": f"/precomp/{username}/{volume_name}",
-            "neuroglancer_url": f"precomputed://http://localhost:8000/precomp/{username}/{volume_name}"
+            "volume_path": f"/uploads/{username}/{volume_name}",
+            "neuroglancer_url": f"precomputed://http://localhost:8000/uploads/{username}/{volume_name}"
         })
 
     except HTTPException:
