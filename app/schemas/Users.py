@@ -40,6 +40,7 @@ class Token(BaseModel):
     AccessToken: str = Field(..., description="JWT 액세스 토큰")
     TokenType: str = Field("bearer", description="토큰 타입")
     ExpiresInMin: int = Field(..., description="토큰 만료 (분)")
+    UserName: Optional[str] = Field(None, description="사용자 이름")  # 추가
 
 class TokenData(BaseModel):
     sub: Optional[str] = None

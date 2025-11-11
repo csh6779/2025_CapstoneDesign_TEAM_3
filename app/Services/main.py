@@ -6,11 +6,11 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from app.api.v1.endpoints import user as user_router_v1
 from app.api.v1.endpoints import Auth, neuroglancer, memory, logs
-from app.utils.file_logger import FileLogger
+from app.utils.json_logger import json_logger
 import os
 import time
 
-# 데이터베이스 자동 초기화 (Base.metadata.create_all 대체)
+# 데이터베이스 자동 초기화
 from app.database.init_db import init_database
 
 # FastAPI 애플리케이션 생성
@@ -20,7 +20,7 @@ app = FastAPI(
     description="이미지 업로드 및 Neuroglancer 뷰어 통합 시스템"
 )
 
-# CORS 설정 추가
+# CORS 설정
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
@@ -34,57 +34,49 @@ app.add_middleware(
 # 프로젝트 루트 경로
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 STATIC_DIR = BASE_DIR / "static"
+BUILD_DIR = STATIC_DIR / "build"
 
-# 데이터 디렉터리 설정 (사용자별 폴더 구조)
+# 데이터 디렉터리 설정
 DATA_ROOT = os.environ.get("DATA_DIR", str(BASE_DIR / "uploads"))
 os.makedirs(DATA_ROOT, exist_ok=True)
 
-# 로거 초기화
-logger = FileLogger(
-    log_dir=str(BASE_DIR / "logs"),
-    log_prefix="app",
-    max_bytes=10 * 1024 * 1024,  # 10MB
-    backup_count=5,
-    enable_daily_rotation=True,
-    enable_console=True
-)
+# 정적 파일 마운트 (React 빌드 결과물)
+if (BUILD_DIR / "static").exists():
+    app.mount("/static", StaticFiles(directory=str(BUILD_DIR / "static")), name="static")
+    json_logger.log(
+        username="system",
+        log_level="INFO",
+        message=f"React 빌드 결과물 마운트됨: {BUILD_DIR / 'static'}",
+        logger_name="server.mount",
+        service="fastapi"
+    )
+else:
+    json_logger.log(
+        username="system",
+        log_level="WARNING",
+        message=f"React 빌드 결과물이 없습니다: {BUILD_DIR}",
+        logger_name="server.mount",
+        service="fastapi"
+    )
 
-# 정적 파일 마운트
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-# uploads 디렉터리를 루트로 마운트 (사용자별 폴더 구조)
+# uploads 디렉터리 마운트
 if os.path.exists(DATA_ROOT):
     app.mount("/uploads", StaticFiles(directory=DATA_ROOT), name="uploads")
-    logger.info(f"uploads 디렉터리 마운트됨: {DATA_ROOT}")
-    logger.info("사용자별 폴더 구조: /uploads/{username}/{volume_name}")
+    json_logger.log(
+        username="system",
+        log_level="INFO",
+        message=f"uploads 디렉터리 마운트됨: {DATA_ROOT}",
+        logger_name="server.mount",
+        service="fastapi",
+        additional_info={"structure": "/uploads/{username}/{volume_name}"}
+    )
 
 # 라우터 등록
-# v1 사용자 관리 API
 app.include_router(user_router_v1.router, prefix="/v1")
-
-# v1 인증 API
 app.include_router(Auth.router, prefix="/v1")
-
-# Neuroglancer API
-app.include_router(
-    neuroglancer.router,
-    prefix="/api",
-    tags=["Neuroglancer"]
-)
-
-# 메모리 관리 API
-app.include_router(
-    memory.router,
-    prefix="/api",
-    tags=["Memory"]
-)
-
-# 로그 관리 API
-app.include_router(
-    logs.router,
-    prefix="/api",
-    tags=["Logs"]
-)
+app.include_router(neuroglancer.router, prefix="/api", tags=["Neuroglancer"])
+app.include_router(memory.router, prefix="/api", tags=["Memory"])
+app.include_router(logs.router, prefix="/api/v1", tags=["Logs"])
 
 # 볼륨 직접 접근을 위한 동적 라우팅
 from fastapi import HTTPException as FastAPIHTTPException
@@ -93,28 +85,42 @@ from starlette.responses import FileResponse as StarletteFileResponse, JSONRespo
 
 @app.get("/uploads/{username}/{volume_name}/info")
 async def get_volume_info(username: str, volume_name: str):
-    """
-    사용자별 볼륨 info 파일 접근
-    경로: /uploads/{username}/{volume_name}/info
-    """
-    logger.info(f"📂 Volume info 요청: {username}/{volume_name}")
+    """사용자별 볼륨 info 파일 접근"""
+    json_logger.log(
+        username="system",
+        log_level="INFO",
+        message=f"Volume info 요청: {username}/{volume_name}",
+        logger_name="volume.info",
+        service="neuroglancer",
+        additional_info={"username": username, "volume_name": volume_name}
+    )
 
     user_path = os.path.join(DATA_ROOT, username)
     volume_path = os.path.join(user_path, volume_name)
     info_path = os.path.join(volume_path, "info")
 
-    logger.info(f"  🔍 Info 경로: {info_path}")
-
     if os.path.exists(info_path):
-        logger.info(f"  ✅ Info 파일 발견")
-        return StarletteFileResponse(
-            info_path,
-            media_type="application/json"
+        json_logger.log(
+            username=username,
+            log_level="INFO",
+            message="Volume info 제공 성공",
+            logger_name="volume.info",
+            service="neuroglancer",
+            additional_info={"volume_name": volume_name, "info_path": info_path}
         )
+        return StarletteFileResponse(info_path, media_type="application/json")
 
-    logger.error(f"  ❌ Info 파일 없음")
+    # Info 파일이 없는 경우
+    json_logger.log(
+        username=username,
+        log_level="ERROR",
+        message="Volume info 파일 없음",
+        logger_name="volume.info",
+        service="neuroglancer",
+        additional_info={"volume_name": volume_name, "info_path": info_path}
+    )
 
-    # 디버깅 정보 제공
+    # 사용 가능한 볼륨 목록 수집
     available_volumes = []
     if os.path.exists(DATA_ROOT):
         for user in os.listdir(DATA_ROOT):
@@ -138,33 +144,59 @@ async def get_volume_info(username: str, volume_name: str):
 
 @app.get("/uploads/{username}/{volume_name}/{scale_key}/{chunk_file}")
 async def get_volume_chunk(username: str, volume_name: str, scale_key: str, chunk_file: str):
-    """
-    사용자별 볼륨 청크 파일 접근
-    경로: /uploads/{username}/{volume_name}/{scale_key}/{chunk_file}
-    """
-    logger.info(f"📦 Chunk 요청: {username}/{volume_name}/{scale_key}/{chunk_file}")
-
+    """사용자별 볼륨 청크 파일 접근"""
     user_path = os.path.join(DATA_ROOT, username)
     volume_path = os.path.join(user_path, volume_name)
     chunk_path = os.path.join(volume_path, scale_key, chunk_file)
 
     if os.path.exists(chunk_path):
-        logger.info(f"  ✅ Chunk 발견: {chunk_path}")
+        # DEBUG 레벨로 로깅 (청크 요청이 매우 많기 때문)
+        json_logger.log(
+            username=username,
+            log_level="DEBUG",
+            message="Chunk 제공 성공",
+            logger_name="volume.chunk",
+            service="neuroglancer",
+            additional_info={
+                "volume_name": volume_name,
+                "scale_key": scale_key,
+                "chunk_file": chunk_file
+            }
+        )
         return StarletteFileResponse(chunk_path)
 
-    logger.error(f"  ❌ Chunk 없음: {chunk_path}")
+    # 청크 파일이 없는 경우
+    json_logger.log(
+        username=username,
+        log_level="ERROR",
+        message="Chunk 파일 없음",
+        logger_name="volume.chunk",
+        service="neuroglancer",
+        additional_info={
+            "volume_name": volume_name,
+            "scale_key": scale_key,
+            "chunk_file": chunk_file,
+            "chunk_path": chunk_path
+        }
+    )
+
     raise FastAPIHTTPException(
         status_code=404,
         detail=f"Chunk file not found: {username}/{volume_name}/{scale_key}/{chunk_file}"
     )
 
 
-# 디버깅용: 사용 가능한 모든 볼륨 목록 조회
 @app.get("/api/volumes/list")
 async def list_all_volumes():
-    """
-    모든 사용자의 볼륨 목록 조회 (디버깅용)
-    """
+    """모든 사용자의 볼륨 목록 조회 (디버깅용)"""
+    json_logger.log(
+        username="system",
+        log_level="INFO",
+        message="전체 볼륨 목록 조회",
+        logger_name="volume.list",
+        service="api"
+    )
+
     volumes = {}
 
     if os.path.exists(DATA_ROOT):
@@ -208,81 +240,140 @@ async def list_all_volumes():
 async def log_requests(request: Request, call_next):
     """모든 HTTP 요청/응답을 로깅"""
     start_time = time.time()
-
-    # 요청 로깅
     client_ip = request.client.host if request.client else "unknown"
-    logger.log_request(request.method, request.url.path, client_ip)
 
     # 요청 처리
     response = await call_next(request)
 
     # 응답 로깅
     duration_ms = (time.time() - start_time) * 1000
-    logger.log_response(request.method, request.url.path, response.status_code, duration_ms)
+
+    # 로그 API 자체는 제외 (무한 루프 방지)
+    if not request.url.path.startswith("/api/v1/logs"):
+        # 로그 레벨 결정
+        if response.status_code >= 500:
+            log_level = "ERROR"
+        elif response.status_code >= 400:
+            log_level = "WARNING"
+        else:
+            log_level = "INFO"
+
+        json_logger.log(
+            username="system",
+            log_level=log_level,
+            message=f"{request.method} {request.url.path} - {response.status_code}",
+            logger_name="http.middleware",
+            service="fastapi",
+            additional_info={
+                "method": request.method,
+                "path": request.url.path,
+                "client_ip": client_ip,
+                "status_code": response.status_code,
+                "duration_ms": round(duration_ms, 2)
+            }
+        )
 
     return response
 
 
-# 루트 경로에서 index.html 제공
-@app.get("/")
-def read_root():
-    index_path = STATIC_DIR / "index.html"
+# React Router 지원
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    """React Router를 지원하기 위해 모든 경로에서 index.html을 반환"""
+    # API 경로는 제외
+    if full_path.startswith("api/") or full_path.startswith("v1/") or full_path.startswith("uploads/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # React 빌드 결과물의 index.html 제공
+    index_path = BUILD_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return {"message": "Welcome to Neuroglancer 대용량 뷰어 시스템"}
+
+    # 빌드 결과물이 없으면 안내 메시지
+    return {
+        "message": "React 빌드 결과물이 없습니다.",
+        "instruction": "'cd static && npm install && npm run build'를 실행하세요.",
+        "build_dir": str(BUILD_DIR)
+    }
 
 
 # 서버 시작 이벤트
 @app.on_event("startup")
 async def startup_event():
-    # 데이터베이스 초기화 (테이블 생성 및 마이그레이션)
+    """서버 시작 시 실행"""
+    # 데이터베이스 초기화
     init_database()
 
-    logger.log_header("Neuroglancer 대용량 뷰어 시스템 시작")
-    logger.info(f"데이터 루트: {DATA_ROOT}")
-    logger.info(f"정적 파일: {STATIC_DIR}")
-    logger.info(f"로그 디렉터리: {BASE_DIR / 'logs'}")
-    logger.info(f"서버 주소: http://localhost:8000")
-    logger.info(f"API 문서: http://localhost:8000/docs")
-    logger.info(f"📁 사용자별 폴더 구조: /uploads/{{username}}/{{volume_name}}")
-    logger.log_separator()
+    # 서버 시작 로깅
+    json_logger.log(
+        username="system",
+        log_level="INFO",
+        message="서버 시작",
+        logger_name="server.startup",
+        service="fastapi",
+        additional_info={
+            "data_root": DATA_ROOT,
+            "static_dir": str(STATIC_DIR),
+            "build_dir": str(BUILD_DIR),
+            "server_url": "http://localhost:8000",
+            "version": "2.0.0"
+        }
+    )
 
+    # 콘솔 출력
     print("=" * 60)
     print("🚀 Neuroglancer 대용량 뷰어 시스템 시작")
     print(f"📍 데이터 루트: {DATA_ROOT}")
     print(f"📁 정적 파일: {STATIC_DIR}")
-    print(f"📝 로그 디렉터리: {BASE_DIR / 'logs'}")
-    print(f"🌐 서버 주소: http://localhost:8000")
+    print(f"⚙️ React 빌드: {BUILD_DIR}")
+    if (BUILD_DIR / "index.html").exists():
+        print("   ✅ 빌드 결과물 발견")
+    else:
+        print("   ⚠️ 빌드 필요: 'cd static && npm run build'")
+    print(f"📝 로그: logs/YYYY/MM/DD.txt")
+    print(f"🌐 서버: http://localhost:8000")
     print(f"📚 API 문서: http://localhost:8000/docs")
     print(f"👥 사용자별 폴더: /uploads/{{username}}/{{volume}}")
     print(f"🔍 볼륨 목록: http://localhost:8000/api/volumes/list")
+    print(f"📊 로그 API: http://localhost:8000/api/v1/logs/dates")
     print("=" * 60)
 
 
 # 서버 종료 이벤트
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.log_header("서버 종료")
-    logger.info("정상 종료")
-    logger.log_separator()
+    """서버 종료 시 실행"""
+    json_logger.log(
+        username="system",
+        log_level="INFO",
+        message="서버 종료",
+        logger_name="server.shutdown",
+        service="fastapi"
+    )
 
     print("\n" + "=" * 60)
-    print("🛑 서버 종료 중...")
+    print("🛑 서버 종료")
     print("=" * 60)
 
 
-# 직접 실행 시 uvicorn 서버 시작
+# 직접 실행 시
 if __name__ == "__main__":
     import uvicorn
 
     print("\n" + "=" * 60)
     print("🚀 FastAPI 개발 서버 시작...")
-    print(f"📍 서버 주소: http://localhost:8000")
-    print(f"📁 데이터 디렉터리: {DATA_ROOT}")
-    print(f"👥 사용자별 폴더 구조: /uploads/{{username}}/{{volume}}")
-    print(f"📚 API 문서: http://localhost:8000/docs")
-    print(f"🔍 볼륨 목록: http://localhost:8000/api/volumes/list")
-    print("\n서버 중지하려면 Ctrl+C를 누르세요.")
+    print(f"📍 서버: http://localhost:8000")
+    print(f"📁 데이터: {DATA_ROOT}")
+    print(f"⚙️ React: {BUILD_DIR}")
+    if (BUILD_DIR / "index.html").exists():
+        print("   ✅ 빌드 완료")
+    else:
+        print("   ⚠️ 빌드 필요")
+    print(f"👥 구조: /uploads/{{username}}/{{volume}}")
+    print(f"📚 문서: http://localhost:8000/docs")
+    print(f"📊 로그: logs/YYYY/MM/DD.txt")
+    print("\n서버 중지: Ctrl+C")
     print("=" * 60 + "\n")
 
     uvicorn.run(

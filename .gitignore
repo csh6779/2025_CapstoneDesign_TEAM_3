@@ -64,3 +64,11 @@ alembic/versions/*.pyc
 *.bak
 *_backup.html
 *_old*.html
+
+# React / Frontend
+node_modules/
+static/build/
+static/node_modules/
+*.local
+.npm
+.eslintcache

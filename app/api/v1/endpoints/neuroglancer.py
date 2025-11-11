@@ -20,7 +20,7 @@ from PIL import Image
 import gc
 
 from app.api.v1.deps.Auth import get_current_user
-from app.utils.ncsa_logger import ncsa_logger
+from app.utils.json_logger import json_logger  # ✅ 변경: ncsa_logger → json_logger
 
 # Pillow의 decompression bomb 보호 해제 (대용량 이미지 처리)
 Image.MAX_IMAGE_PIXELS = None
@@ -192,7 +192,7 @@ async def upload_file(
 
     # 파일 형식 검증
     if not validate_image_file(file.filename):
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=username,
@@ -311,7 +311,7 @@ async def upload_file(
         background_tasks.add_task(cleanup_temp_file, upload_path)
 
         # 업로드 성공 로깅
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=username,
@@ -325,7 +325,7 @@ async def upload_file(
         )
 
         # 사용자 활동 로깅
-        ncsa_logger.log_activity(
+        json_logger.log_activity(
             username=username,
             activity="IMAGE_UPLOADED",
             status="SUCCESS",
@@ -340,7 +340,7 @@ async def upload_file(
         )
 
         # 청크 분리 활동 로깅
-        ncsa_logger.log_activity(
+        json_logger.log_activity(
             username=username,
             activity="CHUNK_SPLIT",
             status="SUCCESS",
@@ -380,7 +380,7 @@ async def upload_file(
         gc.collect()
 
         # 업로드 실패 로깅
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=username,
@@ -391,7 +391,7 @@ async def upload_file(
             }
         )
 
-        ncsa_logger.log_activity(
+        json_logger.log_activity(
             username=username,
             activity="IMAGE_UPLOAD_FAILED",
             status="FAILED",
@@ -453,7 +453,7 @@ async def list_volumes(
                         })
 
         # 볼륨 목록 조회 로깅
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=username,
@@ -464,7 +464,7 @@ async def list_volumes(
         return JSONResponse(content={"volumes": volumes, "count": len(volumes)})
 
     except Exception as e:
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=current_user.UserName,
@@ -497,7 +497,7 @@ async def get_volume_info(
         info_path = os.path.join(volume_path, "info")
 
         if not os.path.exists(info_path):
-            await ncsa_logger.log_request(
+            await json_logger.log_request(
                 request=request,
                 response=response,
                 auth_user=username,
@@ -513,7 +513,7 @@ async def get_volume_info(
             info = json.load(f)
 
         # 볼륨 정보 조회 로깅
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=username,
@@ -522,7 +522,7 @@ async def get_volume_info(
         )
 
         # 이미지 열기 활동 로깅
-        ncsa_logger.log_activity(
+        json_logger.log_activity(
             username=username,
             activity="IMAGE_VIEW",
             status="SUCCESS",
@@ -543,7 +543,7 @@ async def get_volume_info(
     except HTTPException:
         raise
     except Exception as e:
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=current_user.UserName,
@@ -576,7 +576,7 @@ async def delete_volume(
         volume_path = os.path.join(user_data_root, volume_name)
 
         if not os.path.exists(volume_path):
-            await ncsa_logger.log_request(
+            await json_logger.log_request(
                 request=request,
                 response=response,
                 auth_user=username,
@@ -592,7 +592,7 @@ async def delete_volume(
         background_tasks.add_task(shutil.rmtree, volume_path)
 
         # 볼륨 삭제 로깅
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=username,
@@ -600,7 +600,7 @@ async def delete_volume(
             details={"volume_name": volume_name}
         )
 
-        ncsa_logger.log_activity(
+        json_logger.log_activity(
             username=username,
             activity="VOLUME_DELETED",
             status="SUCCESS",
@@ -614,7 +614,7 @@ async def delete_volume(
     except HTTPException:
         raise
     except Exception as e:
-        await ncsa_logger.log_request(
+        await json_logger.log_request(
             request=request,
             response=response,
             auth_user=current_user.UserName,
@@ -643,7 +643,7 @@ async def test_upload_setup(
     user_temp_dir = get_user_temp_dir(username)
 
     # 테스트 요청 로깅
-    await ncsa_logger.log_request(
+    await json_logger.log_request(
         request=request,
         response=response,
         auth_user=username,

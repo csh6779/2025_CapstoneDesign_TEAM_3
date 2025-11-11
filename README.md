@@ -41,9 +41,24 @@ source .venv/bin/activate
 
 ### 3. 패키지 설치
 
+#### 백엔드 (Python)
 ```bash
 pip install -r requirements.txt
 ```
+
+#### 프론트엔드 (React)
+```bash
+# Windows
+build_frontend.bat
+
+# Linux/Mac
+cd static
+npm install
+npm run build
+cd ..
+```
+
+> **중요**: 프론트엔드 빌드를 먼저 실행해야 웹 인터페이스가 정상적으로 작동합니다.
 
 ### 4. 데이터베이스 설정
 
@@ -140,6 +155,64 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - 메인 페이지: http://localhost:8000
 - API 문서: http://localhost:8000/docs
 - Alternative API 문서: http://localhost:8000/redoc
+
+## 🎨 프론트엔드 개발
+
+### 개발 모드
+
+프론트엔드를 개발 중이라면, 별도의 개발 서버를 실행할 수 있습니다:
+
+```bash
+# 터미널 1: 백엔드
+start_server.bat  # 또는 uvicorn app.Services.main:app --reload
+
+# 터미널 2: 프론트엔드 개발 서버
+cd static
+npm start
+```
+
+이렇게 하면:
+- 프론트엔드: `http://localhost:3000` (핫 리로딩 지원)
+- 백엔드 API: `http://localhost:8000`
+- CORS는 이미 설정되어 있어서 통신 가능
+
+### 프로덕션 빌드
+
+배포할 때는 React 앱을 빌드해야 합니다:
+
+```bash
+# Windows
+build_frontend.bat
+
+# Linux/Mac
+cd static
+npm run build
+cd ..
+```
+
+빌드 후 `start_server.bat`로 서버를 실행하면 빌드된 프론트엔드가 `http://localhost:8000`에서 제공됩니다.
+
+### 프론트엔드 구조
+
+```
+static/
+├── src/
+│   ├── pages/
+│   │   ├── MainPage.jsx          # 메인 페이지
+│   │   ├── LoginPage.jsx         # 로그인
+│   │   ├── SignupPage.jsx        # 회원가입
+│   │   ├── FindIdPage.jsx        # 아이디 찾기
+│   │   ├── FindPasswordPage.jsx  # 비밀번호 찾기
+│   │   └── LogHistoryPage.jsx    # 로그 히스토리
+│   ├── index.js               # React 진입점
+│   └── index.css              # 글로벌 스타일 (Tailwind)
+├── public/
+│   └── index.html
+├── package.json
+└── build/                 # 빌드 결과물 (npm run build 후)
+    ├── index.html
+    └── static/
+```
 
 ## 📚 API 엔드포인트
 
