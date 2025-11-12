@@ -64,7 +64,7 @@ class VolumeInfo(BaseModel):
 
 def validate_image_file(filename: str) -> bool:
     """파일 확장자 검증"""
-    return filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif'))
+    return filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp'))
 
 
 def process_chunk_from_image(img: Image.Image, chunk_x: int, chunk_y: int,

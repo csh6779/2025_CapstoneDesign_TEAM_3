@@ -52,8 +52,18 @@ function LogHistoryPage() {
             }
 
             const data = await response.json();
+
+            // 🔍 디버깅: API 응답 확인
+            console.log('=== API 응답 디버깅 ===');
+            console.log('전체 응답:', data);
+            if (data.logs && data.logs.length > 0) {
+                console.log('첫 번째 로그:', data.logs[0]);
+                console.log('필드명:', Object.keys(data.logs[0]));
+            }
+
             setLogs(data.logs || []);
         } catch (err) {
+            console.error('로그 조회 에러:', err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -129,17 +139,40 @@ function LogHistoryPage() {
         return colors[level] || 'bg-gray-100 text-gray-800';
     };
 
-    // 시간 포맷
-    const formatTime = (timestamp) => {
-        const date = new Date(timestamp);
-        return date.toLocaleString('ko-KR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
+    // 🔧 한글/영문 필드명 호환 함수
+    const getFieldValue = (log, englishField, koreanField) => {
+        return log[englishField] || log[koreanField];
+    };
+
+    // 🔧 시간 포맷 (한글/영문 호환)
+    const formatTime = (log) => {
+        // 영문 필드명 우선, 한글 필드명 대체
+        const timestamp = getFieldValue(log, 'timestamp', '타임스탬프');
+
+        if (!timestamp) {
+            console.warn('timestamp 없음:', log);
+            return '시간 정보 없음';
+        }
+
+        try {
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) {
+                console.warn('날짜 파싱 실패:', timestamp);
+                return timestamp; // 원본 그대로 표시
+            }
+
+            return date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        } catch (e) {
+            console.error('formatTime 에러:', e, timestamp);
+            return timestamp || '날짜 오류';
+        }
     };
 
     return (
@@ -174,19 +207,19 @@ function LogHistoryPage() {
                         <div className="bg-white rounded-lg shadow p-4">
                             <div className="text-sm text-gray-600">INFO</div>
                             <div className="text-2xl font-bold text-blue-600">
-                                {stats.level_counts?.INFO || 0}
+                                {stats.level_counts?.INFO || stats.log_level_counts?.INFO || 0}
                             </div>
                         </div>
                         <div className="bg-white rounded-lg shadow p-4">
                             <div className="text-sm text-gray-600">WARNING</div>
                             <div className="text-2xl font-bold text-yellow-600">
-                                {stats.level_counts?.WARNING || 0}
+                                {stats.level_counts?.WARNING || stats.log_level_counts?.WARNING || 0}
                             </div>
                         </div>
                         <div className="bg-white rounded-lg shadow p-4">
                             <div className="text-sm text-gray-600">ERROR</div>
                             <div className="text-2xl font-bold text-red-600">
-                                {stats.level_counts?.ERROR || 0}
+                                {stats.level_counts?.ERROR || stats.log_level_counts?.ERROR || 0}
                             </div>
                         </div>
                     </div>
@@ -289,39 +322,52 @@ function LogHistoryPage() {
                                 <p className="text-gray-600">로그가 없습니다.</p>
                             </div>
                         ) : (
-                            logs.map((log, index) => (
-                                <div key={index} className="p-4 hover:bg-gray-50 transition">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center space-x-2 mb-2">
-                                                <span className={`px-2 py-1 text-xs font-semibold rounded ${getLogLevelColor(log.로그레벨)}`}>
-                                                    {log.로그레벨}
-                                                </span>
-                                                <span className="text-xs text-gray-500">
-                                                    {log.서비스 && `[${log.서비스}]`}
-                                                </span>
-                                                <span className="text-xs text-gray-500">
-                                                    {log.로거 && `{${log.로거}}`}
-                                                </span>
+                            logs.map((log, index) => {
+                                // 한글/영문 필드명 호환
+                                const logLevel = getFieldValue(log, 'log_level', '로그레벨');
+                                const message = getFieldValue(log, 'message', '메시지');
+                                const service = getFieldValue(log, 'service', '서비스');
+                                const logger = getFieldValue(log, 'logger', '로거');
+                                const details = getFieldValue(log, 'details', '추가정보');
+
+                                return (
+                                    <div key={index} className="p-4 hover:bg-gray-50 transition">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded ${getLogLevelColor(logLevel)}`}>
+                                                        {logLevel}
+                                                    </span>
+                                                    {service && (
+                                                        <span className="text-xs text-gray-500">
+                                                            [{service}]
+                                                        </span>
+                                                    )}
+                                                    {logger && (
+                                                        <span className="text-xs text-gray-500">
+                                                            {`{${logger}}`}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-gray-900 mb-1">{message}</p>
+                                                {details && Object.keys(details).length > 0 && (
+                                                    <details className="mt-2">
+                                                        <summary className="text-xs text-blue-600 cursor-pointer hover:underline">
+                                                            상세 정보 보기
+                                                        </summary>
+                                                        <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
+                                                            {JSON.stringify(details, null, 2)}
+                                                        </pre>
+                                                    </details>
+                                                )}
                                             </div>
-                                            <p className="text-sm text-gray-900 mb-1">{log.메시지}</p>
-                                            {log.추가정보 && Object.keys(log.추가정보).length > 0 && (
-                                                <details className="mt-2">
-                                                    <summary className="text-xs text-blue-600 cursor-pointer hover:underline">
-                                                        상세 정보 보기
-                                                    </summary>
-                                                    <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
-                                                        {JSON.stringify(log.추가정보, null, 2)}
-                                                    </pre>
-                                                </details>
-                                            )}
-                                        </div>
-                                        <div className="text-xs text-gray-500 ml-4">
-                                            {formatTime(log.타임스탬프)}
+                                            <div className="text-xs text-gray-500 ml-4 whitespace-nowrap">
+                                                {formatTime(log)}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>

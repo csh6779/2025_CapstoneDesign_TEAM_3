@@ -21,7 +21,10 @@ class JSONLogger:
     """JSON 형식으로 로그를 기록하는 로거 (날짜 계층 구조)"""
 
     def __init__(self, log_dir: str = "logs"):
-        self.log_dir = Path(log_dir)
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent  # utils -> app -> root
+        self.log_dir = project_root / log_dir  # ✅ 절대 경로
+        print(f"[JSONLogger] 로그 디렉터리: {self.log_dir.absolute()}")
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # 로그 레벨
@@ -173,8 +176,10 @@ class JSONLogger:
         if details:
             request_info.update(details)
 
-        # 상태 코드 확인
-        status_code = getattr(response, "status_code", 200)
+        # 상태 코드 확인 (None인 경우 200으로 기본값 설정)
+        status_code = getattr(response, "status_code", None)
+        if status_code is None:
+            status_code = 200
 
         # 로그 레벨 결정
         if status_code >= 500:
