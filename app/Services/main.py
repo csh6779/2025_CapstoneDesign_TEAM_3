@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 origins = [
     # ... 기존 항목 ...
     "http://localhost:8080",      # 👈 로컬 Neuroglancer 포트 추가
+    "http://localhost:3000",      # 프론트개발 3000포트
     "http://127.0.0.1:8080"       # 👈 127.0.0.1도 함께 추가하는 것이 좋습니다.
 ]
 
