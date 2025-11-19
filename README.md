@@ -58,6 +58,13 @@ npm run build
 cd ..
 ```
 
+#### NG (Neuroglancer)
+```bash
+cd neuroglancer
+npm install
+npm run dev-server
+```
+
 > **중요**: 프론트엔드 빌드를 먼저 실행해야 웹 인터페이스가 정상적으로 작동합니다.
 
 ### 4. 데이터베이스 설정
