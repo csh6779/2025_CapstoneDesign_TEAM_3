@@ -1,4 +1,4 @@
-// static/src/pages/MainPage.jsx
+// frontend/src/pages/MainPage.jsx
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,7 +12,7 @@ const RANK_DETAILS = {
 };
 const DEFAULT_RANK = 'Bronze';
 const API_BASE_URL = 'http://localhost:8000';
-const NEUROGLANCER_BASE_URL = 'http://localhost:8080'; // 로컬 Neuroglancer 주소
+const NEUROGLANCER_BASE_URL = 'https://neuroglancer-demo.appspot.com';
 
 function MainPage() {
 
@@ -439,7 +439,7 @@ function MainPage() {
 
                 <div className="drawer-content" style={{ padding: 0 }}>
 
-                    {/* ===== 섹션 1: 사진 업로드 (Upload) ===== */}
+                    {/* ===== 섹션 1: 사진 관리 ===== */}
                     <div className="drawer-section">
                         <button
                             className="drawer-section-header"
@@ -447,71 +447,96 @@ function MainPage() {
                         >
                             <span className="drawer-section-title">
                                 <i className={`drawer-section-chevron ${isUploadSectionOpen ? 'open' : ''} fas fa-chevron-right`}></i>
-                                <span>사진 업로드</span>
+                                <span>사진 관리</span>
                             </span>
                         </button>
 
                         {isUploadSectionOpen && (
                             <div className="drawer-section-body">
-
-                                {/* 1-1. 드롭존 */}
-                                <div
-                                    id="dropzone"
-                                    className="dropzone"
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleFileDrop}
-                                >
-                                    <i className="fas fa-cloud-upload-alt upload-box-icon"></i>
-                                    <p className="gray-font">파일을 드래그하세요</p>
-                                    <p className="muted">또는</p>
-                                    <input
-                                        type="file"
-                                        id="fileInput"
-                                        multiple
-                                        className="hidden"
-                                        ref={fileInputRef}
-                                        onChange={handleFileSelect}
-                                        accept=".png,.jpg,.jpeg,.tiff,.tif"
-                                    />
-                                    <button id="browseBtn" className="file-btn" onClick={() => fileInputRef.current.click()}>
-                                        파일 찾기
-                                    </button>
+                                {/* 사진 선택하기 버튼 */}
+                                <div className="p-4">
+                                    <Link
+                                        to="/file-select"
+                                        className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
+                                        onClick={handleCloseDrawer}
+                                    >
+                                        <i className="fas fa-images mr-2"></i>
+                                        사진 선택하기
+                                    </Link>
+                                    <p className="text-xs text-gray-500 text-center mt-2">
+                                        F:/uploads, /tmp/uploads, C:/uploads
+                                    </p>
                                 </div>
 
-                                {/* 1-2. 업로드 대기 파일 목록 */}
-                                <div className="file-list">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h3 className="file-list-title">업로드 대기중 ({files.length})</h3>
-                                        {files.length > 0 && (
+                                {/* 구분선 */}
+                                <div className="px-4 pb-4">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-gray-200"></div>
+                                        </div>
+                                        <div className="relative flex justify-center text-xs">
+                                            <span className="px-2 bg-white text-gray-500">또는 직접 업로드</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 간소화된 드롭존 */}
+                                <div className="px-4 pb-4">
+                                    <div
+                                        className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer"
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleFileDrop}
+                                        onClick={() => fileInputRef.current.click()}
+                                    >
+                                        <i className="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-1"></i>
+                                        <p className="text-sm text-gray-600">클릭하여 파일 선택</p>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            className="hidden"
+                                            ref={fileInputRef}
+                                            onChange={handleFileSelect}
+                                            accept=".png,.jpg,.jpeg,.tiff,.tif"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 업로드 대기 파일 */}
+                                {files.length > 0 && (
+                                    <div className="px-4 pb-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-sm font-medium text-gray-700">
+                                                업로드 대기 ({files.length})
+                                            </h4>
                                             <button
                                                 onClick={handleChunkConversion}
                                                 disabled={uploading}
-                                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition"
+                                                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 text-xs"
                                             >
-                                                {uploading ? (
-                                                    <><i className="fas fa-spinner fa-spin mr-2"></i>변환 중...</>
-                                                ) : (
-                                                    <><i className="fas fa-cut mr-2"></i>청크 분해</>
-                                                )}
+                                                {uploading ? '변환 중...' : '청크 분해'}
                                             </button>
-                                        )}
-                                    </div>
-                                    <div id="fileList" className="file-list-body max-h-40 overflow-y-auto">
-                                        {files.length === 0 && <p className="text-xm text-gray-400 text-center py-2">파일이 없습니다.</p>}
-                                        {files.map((file, index) => (
-                                            <div key={index} className="file-item">
-                                                <div className="file-item-info">
-                                                    <div className="file-item-name">{file.name}</div>
-                                                    <div className="file-item-size">{(file.size / 1024).toFixed(1)} KB</div>
+                                        </div>
+                                        <div className="max-h-32 overflow-y-auto space-y-1">
+                                            {files.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between bg-gray-50 rounded p-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-gray-700 truncate">{file.name}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {(file.size / 1024 / 1024).toFixed(1)} MB
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDeleteFile(file)}
+                                                        className="ml-2 text-red-500 hover:text-red-700"
+                                                    >
+                                                        <i className="fas fa-trash text-xs"></i>
+                                                    </button>
                                                 </div>
-                                                <button className="file-item-delete-btn" onClick={() => handleDeleteFile(file)}>
-                                                    <i className="fas fa-trash-alt"></i>
-                                                </button>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )}
                     </div>

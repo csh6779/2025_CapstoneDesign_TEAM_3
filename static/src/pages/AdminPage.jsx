@@ -1,17 +1,20 @@
-// static/src/pages/AdminPage.jsx
+// frontend/src/pages/AdminPage.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import '../AdminPage.css'; //특정 css의 위치에 매핑하기
 
 // --- 전역 상수 ---
 const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/150x150/E2E8F0/4A5568?text=Admin';
 const RANK_DETAILS = {
     'Bronze': { icon: 'fas fa-medal', class: 'bronze' },
     'Silver': { icon: 'fas fa-award', class: 'silver' },
-    'Gold': { icon: 'fas fa-trophy', class: 'gold' }
+    'Gold': { icon: 'fas fa-trophy', class: 'gold' },
+    // ✅ Admin 등급 추가 (고정용)
+    'Admin': { icon: 'fas fa-user-shield', class: 'gold' }
 };
-const DEFAULT_RANK = 'Bronze';
-const API_BASE_URL = 'http://localhost:8000';
-const NEUROGLANCER_BASE_URL = 'http://localhost:8080'; // 로컬 Neuroglancer 주소
+const API_BASE_URL = 'http://localhost:8000'; // Admin Port
+const NEUROGLANCER_BASE_URL = 'http://localhost:8080';
 
 // 공통 Authorization 헤더 유틸
 const getAuthHeaders = () => {
@@ -29,11 +32,11 @@ function AdminPage() {
     const [isVerifySectionVisible, setIsVerifySectionVisible] = useState(true);
     const [toast, setToast] = useState({ message: '', visible: false });
 
-    // Admin 사용자 정보 (MainPage의 user 대신 adminUser로 관리)
+    // Admin 사용자 정보 (Rank는 'Admin'으로 고정될 예정)
     const [adminUser, setAdminUser] = useState({
         LoginId: 'Admin',
         UserName: '관리자',
-        rank: '',
+        rank: 'Admin', // 초기값 고정
         profileImg: PLACEHOLDER_IMAGE_URL
     });
 
@@ -52,58 +55,43 @@ function AdminPage() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [expandedVolumes, setExpandedVolumes] = useState(new Set());
 
-    // 섹션 토글
+    // 섹션 토글 State (메모리 섹션 삭제됨)
     const [isUploadSectionOpen, setIsUploadSectionOpen] = useState(true);
     const [isMyImageSectionOpen, setIsMyImageSectionOpen] = useState(true);
     const [isBookmarkSectionOpen, setIsBookmarkSectionOpen] = useState(false);
-    const [isMemorySectionOpen, setIsMemorySectionOpen] = useState(true);
-
-    // Admin 전용: LoginId 필터 (특정 유저 볼륨만 보기)
-    const [filterLoginId, setFilterLoginId] = useState('');
-
-    // 메모리 상태
-    const [memoryStats, setMemoryStats] = useState({
-        serverMemory: '로딩 중...',
-        cacheUsage: '로딩 중...',
-        cacheHitRate: '로딩 중...'
-    });
 
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
     let toastTimer;
 
-    // --- Role 검증 + Admin 정보 로드 + 초기 볼륨/메모리 로드 ---
+    // --- 초기화 (Auth Check & Data Load) ---
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
         const role = (localStorage.getItem('Role') || '').toLowerCase();
 
+        // 1. 관리자 권한 체크 (필수 유지)
         if (!token || role !== 'admin') {
             alert('관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.');
             navigate('/login');
             return;
         }
 
-        // 관리자 기본 정보 세팅 (MainPage와 동일한 방식)
+        // 2. 관리자 정보 로드
         const storedLoginId = localStorage.getItem('LoginId');
         const storedUserName = localStorage.getItem('UserName') || '관리자';
-        let storedRank = localStorage.getItem('userRank');
-        if (!storedRank) {
-            storedRank = DEFAULT_RANK;
-            localStorage.setItem('userRank', storedRank);
-        }
+        // Rank는 로컬 스토리지 무시하고 'Admin'으로 고정
         const storedProfileImg = localStorage.getItem('profileImage') || PLACEHOLDER_IMAGE_URL;
 
         setAdminUser({
             LoginId: storedLoginId || 'Admin',
             UserName: storedUserName,
-            rank: storedRank,
+            rank: 'ADMIN', // ✅ Rank 고정
             profileImg: storedProfileImg
         });
 
-        // 초기 볼륨: Admin은 기본적으로 전체 볼륨 로드
+        // 3. 초기 데이터 로드 (볼륨만 로드, 메모리 삭제됨)
         const loadInitial = async () => {
-            await loadVolumes('');
-            await fetchMemoryStats();
+            await loadVolumes();
         };
 
         loadInitial();
@@ -114,16 +102,14 @@ function AdminPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigate]);
 
-    // --- 볼륨 관리 함수 (Admin: 전체 + LoginId 필터 지원) ---
-    const loadVolumes = async (LoginId) => {
+    // --- 볼륨 관리 (Admin: 전체 로드) ---
+    const loadVolumes = async () => {
         try {
             const token = localStorage.getItem('accessToken');
             if (!token) return;
 
-            const targetLoginId = LoginId !== undefined ? LoginId : filterLoginId;
-            const query = targetLoginId ? `?LoginId=${encodeURIComponent(targetLoginId)}` : '';
-
-            const response = await fetch(`${API_BASE_URL}/api/volumes${query}`, {
+            // Admin은 모든 볼륨을 가져옴
+            const response = await fetch(`${API_BASE_URL}/api/volumes`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -153,7 +139,7 @@ function AdminPage() {
         try {
             const token = localStorage.getItem('accessToken');
             const response = await fetch(
-                `${API_BASE_URL}/api/volumes/${encodeURIComponent(volumeName)}`, // ✅ Admin은 LoginId 없이 삭제
+                `${API_BASE_URL}/api/volumes/${encodeURIComponent(volumeName)}`,
                 {
                     method: 'DELETE',
                     headers: {
@@ -164,12 +150,10 @@ function AdminPage() {
 
             if (response.ok) {
                 showToast(`🗑️ ${volumeName} 삭제 완료`);
-
                 if (currentVolume?.name === volumeName) {
                     setCurrentVolume(null);
                 }
-
-                await loadVolumes(); // 현재 필터 유지
+                await loadVolumes();
             } else {
                 const error = await response.json();
                 showToast(`❌ 삭제 실패: ${error.detail}`);
@@ -189,10 +173,10 @@ function AdminPage() {
         setExpandedVolumes(newExpanded);
     };
 
-    // 섹션 토글
+    // 섹션 토글 핸들러
     const toggleMyImageSection = () => setIsMyImageSectionOpen(!isMyImageSectionOpen);
 
-    // --- 이벤트 핸들러 ---
+    // --- UI 핸들러 ---
     const showToast = (message) => {
         if (toastTimer) clearTimeout(toastTimer);
         setToast({ message, visible: true });
@@ -210,26 +194,15 @@ function AdminPage() {
             navigate('/login');
             return;
         }
-
         const storedProfileImage = localStorage.getItem('profileImage') || PLACEHOLDER_IMAGE_URL;
         setProfilePreview(storedProfileImage);
-
         setIsVerifySectionVisible(true);
-        setPasswordForm({
-            VerifyId: storedLoginId,
-            VerifyCurrentPassword: '',
-            NewPassword: '',
-            ConfirmPassword: ''
-        });
-
+        setPasswordForm({ VerifyId: storedLoginId, VerifyCurrentPassword: '', NewPassword: '', ConfirmPassword: '' });
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => setIsModalOpen(false);
-
-    const handleOpenLogHistory = () => {
-        window.open('/log-history', '_blank');
-    };
+    const handleOpenLogHistory = () => window.open('/log-history', '_blank');
 
     const handleLogout = () => {
         handleCloseModal();
@@ -237,30 +210,17 @@ function AdminPage() {
     };
 
     const handleCloseLogoutModal = () => setIsLogoutModalOpen(false);
-
     const handleConfirmLogout = () => {
-        localStorage.removeItem('LoginId');
-        localStorage.removeItem('UserName');
-        localStorage.removeItem('profileImage');
-        localStorage.removeItem('userRank');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('Role');
-
+        localStorage.clear(); // 전체 삭제
         handleCloseLogoutModal();
-
-        setAdminUser({
-            LoginId: 'Guest',
-            UserName: '',
-            rank: '',
-            profileImg: PLACEHOLDER_IMAGE_URL
-        });
+        setAdminUser({ LoginId: 'Guest', UserName: '', rank: '', profileImg: PLACEHOLDER_IMAGE_URL });
         setVolumes([]);
         setCurrentVolume(null);
         showToast("로그아웃되었습니다.");
         navigate('/login');
     };
 
-    // --- 파일 업로드 / 드래그 핸들러 ---
+    // --- 파일 핸들러 ---
     const handleFileDrop = (e) => {
         e.preventDefault();
         e.currentTarget.classList.remove('active');
@@ -285,7 +245,6 @@ function AdminPage() {
 
     const handleDragLeave = (e) => e.currentTarget.classList.remove('active');
 
-    // 청크 분해 (업로드 및 변환)
     const handleChunkConversion = async () => {
         if (files.length === 0) {
             showToast('⚠️ 업로드할 파일을 먼저 선택해주세요.');
@@ -309,35 +268,26 @@ function AdminPage() {
 
                 const formData = new FormData();
                 formData.append('file', file);
-                // ✅ 업로드한 관리자 ID를 백엔드에 전달
                 formData.append('LoginId', adminUser.LoginId);
 
                 const response = await fetch(`${API_BASE_URL}/api/upload`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 });
 
                 if (response.ok) {
                     const result = await response.json();
                     showToast(`✅ ${file.name} 청크 변환 완료!`);
-
-                    if (i === 0) {
-                        setCurrentVolume(result);
-                    }
+                    if (i === 0) setCurrentVolume(result);
                 } else {
                     const error = await response.json();
                     showToast(`❌ ${file.name} 실패: ${error.detail}`);
                 }
-
                 setUploadProgress(((i + 1) / files.length) * 100);
             }
-
-            await loadVolumes(); // 현재 필터 기준으로 다시 로드
+            await loadVolumes();
             setFiles([]);
-
         } catch (error) {
             showToast(`❌ 업로드 중 오류: ${error.message}`);
         } finally {
@@ -346,14 +296,12 @@ function AdminPage() {
         }
     };
 
-    // 프로필 이미지 관리
+    // 프로필 이미지 및 비밀번호 변경
     const handleImagePreview = (e) => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setProfilePreview(reader.result);
-            };
+            reader.onloadend = () => setProfilePreview(reader.result);
             reader.readAsDataURL(file);
         }
     };
@@ -362,7 +310,6 @@ function AdminPage() {
 
     const handleSubmitProfileImage = () => {
         let newImageSrc = profilePreview;
-
         if (newImageSrc === PLACEHOLDER_IMAGE_URL) {
             localStorage.setItem('profileImage', PLACEHOLDER_IMAGE_URL);
         } else if (newImageSrc.startsWith('data:image')) {
@@ -370,17 +317,11 @@ function AdminPage() {
         } else {
             newImageSrc = localStorage.getItem('profileImage') || PLACEHOLDER_IMAGE_URL;
         }
-
-        setAdminUser(prevUser => ({
-            ...prevUser,
-            profileImg: newImageSrc
-        }));
-
+        setAdminUser(prev => ({ ...prev, profileImg: newImageSrc }));
         showToast('✅ 이미지가 저장되었습니다.');
         handleCloseModal();
     };
 
-    // 비밀번호 변경
     const handlePasswordFormChange = (e) => {
         const { name, value } = e.target;
         setPasswordForm(prev => ({ ...prev, [name]: value }));
@@ -405,107 +346,38 @@ function AdminPage() {
                 return;
             }
 
-            // TODO: 실제 백엔드 비밀번호 변경 엔드포인트에 맞춰 수정 필요
-            const response = await fetch(`${API_BASE_URL}/v1/users/${adminUser.id}`, {
+            const response = await fetch(`${API_BASE_URL}/v1/users/${adminUser.id || 'admin'}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    Password: passwordForm.NewPassword
-                })
+                body: JSON.stringify({ Password: passwordForm.NewPassword })
             });
 
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.detail || "비밀번호 변경 실패.");
             }
-
             showToast('🔒 비밀번호가 성공적으로 변경되었습니다.');
             handleCloseModal();
-
         } catch (error) {
             showToast(`❌ 비밀번호 변경 중 오류: ${error.message}`);
         }
     };
 
-    // Neuroglancer URL 생성
     const getNeuroglancerUrl = (volume) => {
         if (!volume) return '';
-
         const config = {
-            layers: [
-                {
-                    type: 'image',
-                    source: volume.neuroglancer_url,
-                    name: volume.name,
-                    tab: 'rendering'
-                }
-            ],
+            layers: [{ type: 'image', source: volume.neuroglancer_url, name: volume.name, tab: 'rendering' }],
             layout: '4panel',
             showAxisLines: false
         };
-
         return `${NEUROGLANCER_BASE_URL}/#!${encodeURIComponent(JSON.stringify(config))}`;
     };
 
-    // 메모리 상태 조회
-    const fetchMemoryStats = async () => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/memory-status`, {
-                method: 'GET',
-                headers: {
-                    ...getAuthHeaders()
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Memory API failed (status: ${response.status})`);
-            }
-
-            const stats = await response.json();
-
-            setMemoryStats({
-                serverMemory: `${stats.memory.process_mb.toFixed(1)}MB (${stats.memory.system_percent.toFixed(1)}%)`,
-                cacheUsage: `${stats.cache.cache_size_mb.toFixed(1)}MB / ${stats.config.cache_max_size_mb}MB`,
-                cacheHitRate: `${(stats.cache.hit_rate * 100).toFixed(1)}%`,
-            });
-        } catch (error) {
-            console.warn('메모리 상태 조회 실패:', error.message);
-            setMemoryStats({
-                serverMemory: '로드 실패',
-                cacheUsage: '로드 실패',
-                cacheHitRate: '로드 실패',
-            });
-        }
-    };
-
-    // 메모리 정리
-    const cleanupMemory = async () => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/memory-cleanup`, {
-                method: 'POST',
-                headers: {
-                    ...getAuthHeaders(),
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Memory cleanup failed (status: ${response.status})`);
-            }
-
-            const result = await response.json();
-
-            alert(`메모리 정리 완료: ${result.freed_mb.toFixed(1)}MB 해제`);
-            fetchMemoryStats();
-        } catch (error) {
-            alert('메모리 정리 실패: ' + error.message);
-        }
-    };
-
     return (
-        <div className="body-page">
+        <div className="body-page admin-theme-wrapper">
             {/* 드로어 오버레이 */}
             <div
                 id="drawerOverlay"
@@ -513,7 +385,7 @@ function AdminPage() {
                 onClick={handleCloseDrawer}
             ></div>
 
-            {/* 드로어 */}
+            {/* 좌측 드로어 */}
             <div id="uploadDrawer" className={`upload-drawer ${isDrawerOpen ? 'drawer-visible' : ''}`}>
                 <div className="drawer-header">
                     <h3>라이브러리 (Admin)</h3>
@@ -521,7 +393,7 @@ function AdminPage() {
 
                 <div className="drawer-content" style={{ padding: 0 }}>
 
-                    {/* ===== 섹션 1: 사진 업로드 (Upload) ===== */}
+                    {/* ===== 섹션 1: 사진 관리 ===== */}
                     <div className="drawer-section">
                         <button
                             className="drawer-section-header"
@@ -529,78 +401,100 @@ function AdminPage() {
                         >
                             <span className="drawer-section-title">
                                 <i className={`drawer-section-chevron ${isUploadSectionOpen ? 'open' : ''} fas fa-chevron-right`}></i>
-                                <span>사진 업로드</span>
+                                <span>사진 관리</span>
                             </span>
                         </button>
 
                         {isUploadSectionOpen && (
                             <div className="drawer-section-body">
-
-                                {/* 1-1. 드롭존 */}
-                                <div
-                                    id="dropzone"
-                                    className="dropzone"
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleFileDrop}
-                                >
-                                    <i className="fas fa-cloud-upload-alt upload-box-icon"></i>
-                                    <p className="gray-font">파일을 드래그하세요</p>
-                                    <p className="muted">또는</p>
-                                    <input
-                                        type="file"
-                                        id="fileInput"
-                                        multiple
-                                        className="hidden"
-                                        ref={fileInputRef}
-                                        onChange={handleFileSelect}
-                                        accept=".png,.jpg,.jpeg,.tiff,.tif"
-                                    />
-                                    <button id="browseBtn" className="file-btn" onClick={() => fileInputRef.current.click()}>
-                                        파일 찾기
-                                    </button>
+                                {/* 사진 선택 버튼 */}
+                                <div className="p-4">
+                                    <Link
+                                        to="#"
+                                        className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
+                                        onClick={() => fileInputRef.current.click()}
+                                    >
+                                        <i className="fas fa-images mr-2"></i>
+                                        사진 선택하기
+                                    </Link>
+                                    <p className="text-xs text-gray-500 text-center mt-2">
+                                        F:/uploads, /tmp/uploads, C:/uploads
+                                    </p>
                                 </div>
 
-                                {/* 1-2. 업로드 대기 파일 목록 */}
-                                <div className="file-list">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h3 className="file-list-title">업로드 대기중 ({files.length})</h3>
-                                        {files.length > 0 && (
+                                <div className="px-4 pb-4">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-gray-200"></div>
+                                        </div>
+                                        <div className="relative flex justify-center text-xs">
+                                            <span className="px-2 bg-white text-gray-500">또는 직접 업로드</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 드롭존 */}
+                                <div className="px-4 pb-4">
+                                    <div
+                                        className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer"
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleFileDrop}
+                                        onClick={() => fileInputRef.current.click()}
+                                    >
+                                        <i className="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-1"></i>
+                                        <p className="text-sm text-gray-600">클릭하여 파일 선택</p>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            className="hidden"
+                                            ref={fileInputRef}
+                                            onChange={handleFileSelect}
+                                            accept=".png,.jpg,.jpeg,.tiff,.tif"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 업로드 대기 파일 목록 */}
+                                {files.length > 0 && (
+                                    <div className="px-4 pb-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-sm font-medium text-gray-700">
+                                                업로드 대기 ({files.length})
+                                            </h4>
                                             <button
                                                 onClick={handleChunkConversion}
                                                 disabled={uploading}
-                                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium transition"
+                                                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 text-xs"
                                             >
-                                                {uploading ? (
-                                                    <><i className="fas fa-spinner fa-spin mr-2"></i>변환 중...</>
-                                                ) : (
-                                                    <><i className="fas fa-cut mr-2"></i>청크 분해</>
-                                                )}
+                                                {uploading ? '변환 중...' : '청크 분해'}
                                             </button>
-                                        )}
-                                    </div>
-                                    <div id="fileList" className="file-list-body max-h-40 overflow-y-auto">
-                                        {files.length === 0 && <p className="text-xm text-gray-400 text-center py-2">파일이 없습니다.</p>}
-                                        {files.map((file, index) => (
-                                            <div key={index} className="file-item">
-                                                <div className="file-item-info">
-                                                    <div className="file-item-name">{file.name}</div>
-                                                    <div className="file-item-size">{(file.size / 1024).toFixed(1)} KB</div>
+                                        </div>
+                                        <div className="max-h-32 overflow-y-auto space-y-1">
+                                            {files.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between bg-gray-5 rounded p-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-gray-700 truncate">{file.name}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {(file.size / 1024 / 1024).toFixed(1)} MB
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDeleteFile(file)}
+                                                        className="ml-2 text-red-500 hover:text-red-700"
+                                                    >
+                                                        <i className="fas fa-trash text-xs"></i>
+                                                    </button>
                                                 </div>
-                                                <button className="file-item-delete-btn" onClick={() => handleDeleteFile(file)}>
-                                                    <i className="fas fa-trash-alt"></i>
-                                                </button>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )}
                     </div>
 
-                    {/* ------------------------------------------------------------- */}
-                    {/* 섹션 2: 모든 이미지(Volumes) - Admin용, 전체 + 필터 */}
-                    {/* ------------------------------------------------------------- */}
+                    {/* ===== 섹션 2: 이미지 (Admin) ===== */}
                     <div className="drawer-section">
                         <button
                             className="drawer-section-header"
@@ -608,39 +502,12 @@ function AdminPage() {
                         >
                             <span className="drawer-section-title">
                                 <i className={`drawer-section-chevron ${isMyImageSectionOpen ? 'open' : ''} fas fa-chevron-right`}></i>
-                                <span>모든 이미지 (Admin) ({volumes.length})</span>
+                                <span>이미지 (Admin) ({volumes.length})</span>
                             </span>
                         </button>
 
                         {isMyImageSectionOpen && (
                             <div className="drawer-section-body">
-                                {/* LoginId 필터 */}
-                                <div className="mb-2 flex gap-1">
-                                    <input
-                                        type="text"
-                                        placeholder="LoginId로 필터 (엔터 적용)"
-                                        value={filterLoginId}
-                                        onChange={(e) => setFilterLoginId(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                const value = e.target.value.trim();
-                                                setFilterLoginId(value);
-                                                loadVolumes(value);
-                                            }
-                                        }}
-                                        className="flex-1 text-xs bg-gray-100 border border-gray-300 rounded px-2 py-1"
-                                    />
-                                    <button
-                                        className="px-2 text-xs rounded bg-gray-100 border border-gray-300 hover:bg-gray-200"
-                                        onClick={() => {
-                                            setFilterLoginId('');
-                                            loadVolumes('');
-                                        }}
-                                    >
-                                        전체
-                                    </button>
-                                </div>
-
                                 {volumes.length === 0 ? (
                                     <p className="text-sm text-gray-400 text-center py-2">
                                         업로드된 이미지가 없습니다.
@@ -713,7 +580,7 @@ function AdminPage() {
                         )}
                     </div>
 
-                    {/* ===== 섹션 3: 북마크 (Bookmark) ===== */}
+                    {/* ===== 섹션 3: 북마크 (Placeholder) ===== */}
                     <div className="drawer-section">
                         <button
                             className="drawer-section-header"
@@ -724,52 +591,14 @@ function AdminPage() {
                                 <span>북마크</span>
                             </span>
                         </button>
-
                         {isBookmarkSectionOpen && (
                             <div className="drawer-section-body min-h-[100px] flex items-center justify-center">
-                                <p className="text-sm text-gray-400">
-                                    저장된 북마크가 없습니다.
-                                </p>
+                                <p className="text-sm text-gray-400">저장된 북마크가 없습니다.</p>
                             </div>
                         )}
                     </div>
 
-                    {/* ===== 섹션 4: 시스템 메모리 (Admin 전용) ===== */}
-                    <div className="drawer-section">
-                        <button
-                            className="drawer-section-header"
-                            onClick={() => setIsMemorySectionOpen(!isMemorySectionOpen)}
-                        >
-                            <span className="drawer-section-title">
-                                <i className={`drawer-section-chevron ${isMemorySectionOpen ? 'open' : ''} fas fa-chevron-right`}></i>
-                                <span>시스템 메모리 (Admin)</span>
-                            </span>
-                        </button>
-
-                        {isMemorySectionOpen && (
-                            <div className="drawer-section-body">
-                                <div className="memory-box">
-                                    <div className="memory-row">
-                                        <span className="memory-label">서버 메모리:</span>
-                                        <span className="memory-value">{memoryStats.serverMemory}</span>
-                                    </div>
-                                    <div className="memory-row">
-                                        <span className="memory-label">캐시 사용량:</span>
-                                        <span className="memory-value">{memoryStats.cacheUsage}</span>
-                                    </div>
-                                    <div className="memory-row">
-                                        <span className="memory-label">처리 효율성:</span>
-                                        <span className="memory-value">{memoryStats.cacheHitRate}</span>
-                                    </div>
-                                    <div className="memory-actions">
-                                        <button className="memory-btn" onClick={fetchMemoryStats}>새로고침</button>
-                                        <button className="memory-btn cleanup" onClick={cleanupMemory}>정리</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
+                    {/* ✅ 메모리 관리 섹션 삭제됨 */}
                 </div>
             </div>
 
@@ -782,6 +611,7 @@ function AdminPage() {
                     </button>
                     <h1 className="page-title">
                         <Link to="/">대용량 이미지 뷰어</Link>
+                        {/* ✅ ADMIN 뱃지 유지 */}
                         <span className="ml-2 text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 border border-red-300 align-middle">
                             ADMIN
                         </span>
@@ -794,12 +624,13 @@ function AdminPage() {
                             </Link>
                         ) : (
                             <div id="userProfileGroup" className="page-nav-group">
-                                <div className={`header-user-rank ${RANK_DETAILS[adminUser.rank]?.class || 'bronze'}`}>
-                                    <i className={RANK_DETAILS[adminUser.rank]?.icon || 'fas fa-medal'}></i>
+                                {/* ✅ Rank: Admin 고정 */}
+                                <div className={`header-user-rank ${RANK_DETAILS['Admin'].class}`}>
+                                    <i className={RANK_DETAILS['Admin'].icon}></i>
                                     <span>{adminUser.rank}</span>
                                 </div>
                                 <span id="headerUserId" className="header-user-id">
-                                    {adminUser.UserName || adminUser.LoginId} (Admin)
+                                    {adminUser.UserName || adminUser.LoginId}
                                 </span>
                                 <button className="profile-btn" onClick={handleOpenModal}>
                                     <img src={adminUser.profileImg} alt="프로필" id="mainProfileImg" />
@@ -809,7 +640,7 @@ function AdminPage() {
                     </div>
                 </header>
 
-                {/* Neuroglancer 뷰어 */}
+                {/* Neuroglancer 뷰어 패널 */}
                 <div className="main-content-area">
                     <div className="neuroglancer-panel">
                         <div className="neuroglancer-container" id="viewer3D">

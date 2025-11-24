@@ -1,0 +1,111 @@
+/* frontend/src/pages/AdminPage.css */
+
+/* 1. Admin 페이지 전체 래퍼 (검정 배경) */
+.admin-theme-wrapper {
+    background-color: #000000 !important; /* 완전 검정 */
+    color: #E5E7EB !important; /* 글자는 밝은 회색 */
+    min-height: 100vh;
+}
+
+/* 2. 앱 컨테이너 배경 */
+.admin-theme-wrapper .app-container {
+    background-color: #000000 !important;
+}
+
+/* 3. 상단 헤더 (다크 그레이) */
+.admin-theme-wrapper .page-header {
+    background-color: #1F2937 !important; /* 어두운 회색 */
+    border-bottom: 1px solid #374151 !important;
+}
+
+/* 헤더 내 아이콘 및 텍스트 색상 */
+.admin-theme-wrapper .page-header .hamburger-btn,
+.admin-theme-wrapper .page-header .header-user-id, 
+.admin-theme-wrapper .page-header .page-title a {
+    color: #E5E7EB !important;
+}
+
+.admin-theme-wrapper .hamburger-btn:hover {
+    background-color: #374151 !important;
+}
+
+/* 4. 좌측 드로어 (사이드바) */
+.admin-theme-wrapper .upload-drawer {
+    background-color: #111827 !important; /* 아주 어두운 남색/회색 */
+    border-right: 1px solid #374151 !important;
+}
+
+.admin-theme-wrapper .drawer-header {
+    border-bottom: 1px solid #374151 !important;
+}
+
+.admin-theme-wrapper .drawer-header h3,
+.admin-theme-wrapper .drawer-section-title {
+    color: #E5E7EB !important;
+}
+
+/* 드로어 섹션 헤더 */
+.admin-theme-wrapper .drawer-section-header {
+    background-color: #1F2937 !important;
+    border-bottom: 1px solid #374151 !important;
+}
+.admin-theme-wrapper .drawer-section-header:hover {
+    background-color: #374151 !important;
+}
+
+/* 드로어 섹션 바디 (내용물) */
+.admin-theme-wrapper .drawer-section-body {
+    background-color: #111827 !important;
+    color: #D1D5DB !important;
+}
+
+/* 5. 파일 리스트 & 볼륨 리스트 아이템 */
+.admin-theme-wrapper .file-item,
+.admin-theme-wrapper .volume-item-container {
+    background-color: #1F2937 !important;
+    border-color: #374151 !important;
+    color: #E5E7EB !important;
+}
+
+.admin-theme-wrapper .volume-item-header {
+    background-color: #1F2937 !important;
+    color: #E5E7EB !important;
+}
+
+.admin-theme-wrapper .volume-details {
+    background-color: #111827 !important;
+    border-top: 1px solid #374151 !important;
+    color: #D1D5DB !important;
+}
+
+/* 6. Neuroglancer 패널 배경 */
+.admin-theme-wrapper .neuroglancer-panel,
+.admin-theme-wrapper .neuroglancer-container .flex {
+    background-color: #000000 !important;
+}
+
+/* 7. 모달 창 (계정 관리 등) */
+.admin-theme-wrapper .modal-content,
+.admin-theme-wrapper .modal-nav,
+.admin-theme-wrapper .modal-body {
+    background-color: #1F2937 !important;
+    color: #E5E7EB !important;
+    border-color: #374151 !important;
+}
+
+.admin-theme-wrapper .modal-title,
+.admin-theme-wrapper .modal-body-title,
+.admin-theme-wrapper .form-label {
+    color: #E5E7EB !important;
+}
+
+.admin-theme-wrapper .input-field {
+    background-color: #374151 !important;
+    border-color: #4B5563 !important;
+    color: #FFFFFF !important;
+}
+
+/* 버튼류 호버 효과 미세 조정 */
+.admin-theme-wrapper .modal-nav-btn:hover {
+    background-color: #374151 !important;
+}
