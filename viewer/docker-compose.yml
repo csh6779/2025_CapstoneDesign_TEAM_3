@@ -1,0 +1,98 @@
+# docker-compose.yml (JSON Auth - MySQL 제거)
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ati-viewer:3.0
+    container_name: ati-viewer
+    ports:
+      - "9000:9000"
+    volumes:
+      # ✅ 데이터 디렉터리 (사용자 정보, 북마크 저장)
+      - ./data:/viewer/data
+
+      # ✅ 로그 디렉터리
+      - ./logs:/logs
+
+      # ✅ 개발 모드: 코드 변경사항 실시간 반영
+      - ./app:/viewer
+
+      # ✅ 1. Converter 업로드 (상대 경로)
+      - ../converter/uploads:/mnt/converter_uploads:ro
+
+      # ✅ 2. F Drive
+      - F:/uploads:/mnt/f_uploads:ro
+
+      # ✅ 3. Tmp Uploads (웹 서버 업로드)
+      - ./uploads:/mnt/tmp_uploads
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+
+      # ✅ 디렉터리 환경변수
+      - CONVERTER_UPLOADS_DIR=/mnt/converter_uploads
+      - F_UPLOADS_DIR=/mnt/f_uploads
+      - TMP_UPLOADS_DIR=/mnt/tmp_uploads
+      - LOG_DIR=/logs
+      
+      # ✅ Neuroglancer 서버 URL
+      - NEUROGLANCER_URL=http://neuroglancer:8080
+      - NEUROGLANCER_PUBLIC_URL=http://localhost:8080
+
+      # ✅ JWT 설정
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+    restart: unless-stopped
+    networks:
+      - ati-network
+
+  frontend:
+    image: node:22-alpine
+    container_name: ati-frontend
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_URL=http://localhost:9000
+      - REACT_APP_USE_LOCAL_NEUROGLANCER=true
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+      - neuroglancer
+    restart: unless-stopped
+    networks:
+      - ati-network
+
+  neuroglancer:
+    image: node:22
+    container_name: ati-neuroglancer
+    working_dir: /app
+    command: sh -c "npm install && npm run dev-server -- --host 0.0.0.0 --port 8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./neuroglancer:/app
+      - /app/node_modules
+      # ✅ 중요: precomputed 데이터 마운트
+      - ../converter/uploads:/data/converter:ro
+      - F:/uploads:/data/f_drive:ro
+      - ./uploads:/data/tmp:ro
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+    networks:
+      - ati-network
+
+networks:
+  ati-network:
+    name: ati-network

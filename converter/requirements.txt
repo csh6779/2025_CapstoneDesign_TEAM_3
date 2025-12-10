@@ -1,0 +1,4 @@
+Pillow>=10.0.1
+numpy>=1.26.0
+tifffile>=2023.7.10
+pyvips>=2.2.1

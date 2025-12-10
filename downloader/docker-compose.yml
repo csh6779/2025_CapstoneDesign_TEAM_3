@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  downloader:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: neuroglancer-downloader
+    container_name: neuroglancer-downloader
+    ports:
+      - "8001:8001"
+    volumes:
+      # 백엔드 코드 (개발용)
+      - ./backend:/app
+      - ./frontend:/frontend
+      
+      # ✅ 1. Docker 임시 업로드 디렉터리
+      - ./tmp_uploads:/tmp/uploads
+      
+      # ✅ 2. Converter 업로드 (상대 경로 - Viewer와 공유)
+      - ../converter/uploads:/app/converter_uploads
+
+      # ✅ 3. F Drive (절대 경로 - Viewer와 공유)
+      # 실제 운영: F:/uploads 사용
+      # 테스트: C:/Users/csh67/Desktop/test/uploads 사용
+      #- C:/Users/csh67/Desktop/test/uploads:/app/f_uploads
+      # 실제 운영 시 위 줄을 주석하고 아래 줄 사용:
+      - F:/uploads:/app/f_uploads
+
+      # 전송 기록 저장 (디렉터리를 data 폴더로 변경)
+      - ./data:/app/data
+
+      # 로깅 시스템
+      - ../shared_logging.py:/app/shared_logging.py
+      - ./logs:/logs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Seoul
+
+      # ✅ 디렉터리 환경변수
+      - CONVERTER_UPLOADS_DIR=/app/converter_uploads
+      - F_UPLOADS_DIR=/app/f_uploads
+
+    restart: unless-stopped
+
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+networks:
+  default:
+    name: neuroglancer-network

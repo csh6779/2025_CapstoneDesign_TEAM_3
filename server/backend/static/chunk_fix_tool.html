@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuroglancer 청크 수정 도구</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .volume-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .volume-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .volume-url {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        button.danger:hover {
+            background: #c82333;
+        }
+        button.warning {
+            background: #ffc107;
+            color: #333;
+        }
+        button.warning:hover {
+            background: #e0a800;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            margin-top: 15px;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .info {
+            color: #17a2b8;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-ok { background: #28a745; }
+        .status-error { background: #dc3545; }
+        .status-warning { background: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Neuroglancer 청크 수정 도구</h1>
+        
+        <div class="section">
+            <h2>📊 서버 상태</h2>
+            <p>API 서버: <span id="serverStatus">확인 중...</span></p>
+            <button onclick="checkServerStatus()">상태 새로고침</button>
+        </div>
+
+        <div class="section">
+            <h2>📁 볼륨 목록</h2>
+            <button onclick="loadVolumes()">볼륨 목록 새로고침</button>
+            <div id="volumesList">로딩 중...</div>
+        </div>
+
+        <div class="section">
+            <h2>📝 작업 로그</h2>
+            <button onclick="clearLog()">로그 지우기</button>
+            <div id="log" class="log">로그가 여기에 표시됩니다...\n</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        let logElement = document.getElementById('log');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            
+            logElement.innerHTML += `<span class="${className}">[${timestamp}] ${prefix} ${message}</span>\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            logElement.innerHTML = '로그 초기화됨\n';
+        }
+
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/memory-status`);
+                if (response.ok) {
+                    const status = await response.json();
+                    document.getElementById('serverStatus').innerHTML = 
+                        `<span class="status-indicator status-ok"></span>정상 동작 중 (메모리: ${status.memory_usage_percent.toFixed(1)}%)`;
+                    log('서버 상태 확인 완료', 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                document.getElementById('serverStatus').innerHTML = 
+                    `<span class="status-indicator status-error"></span>연결 실패: ${error.message}`;
+                log(`서버 상태 확인 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadVolumes() {
+            const volumesContainer = document.getElementById('volumesList');
+            volumesContainer.innerHTML = '로딩 중...';
+            
+            try {
+                log('볼륨 목록 로드 중...');
+                const response = await fetch(`${API_BASE}/volumes`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.volumes.length === 0) {
+                    volumesContainer.innerHTML = '<p>볼륨이 없습니다.</p>';
+                    log('볼륨이 없습니다');
+                    return;
+                }
+                
+                volumesContainer.innerHTML = '';
+                data.volumes.forEach(volume => {
+                    const volumeDiv = document.createElement('div');
+                    volumeDiv.className = 'volume-item';
+                    
+                    volumeDiv.innerHTML = `
+                        <div>
+                            <div class="volume-name">${volume.name}</div>
+                            <div class="volume-url">${volume.neuroglancer_url}</div>
+                        </div>
+                        <div>
+                            <button class="warning" onclick="fixChunks('${volume.name}')">청크 수정</button>
+                            <button onclick="testVolume('${volume.name}')">테스트</button>
+                            <button class="danger" onclick="deleteVolume('${volume.name}')">삭제</button>
+                        </div>
+                    `;
+                    
+                    volumesContainer.appendChild(volumeDiv);
+                });
+                
+                log(`${data.volumes.length}개 볼륨 로드 완료`, 'success');
+                
+            } catch (error) {
+                volumesContainer.innerHTML = `<p class="error">볼륨 로드 실패: ${error.message}</p>`;
+                log(`볼륨 로드 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function fixChunks(volumeName) {
+            if (!confirm(`볼륨 "${volumeName}"의 청크를 Neuroglancer 형식으로 수정하시겠습니까?`)) {
+                return;
+            }
+
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = '수정 중...';
+
+            try {
+                log(`볼륨 "${volumeName}" 청크 수정 시작...`);
+                
+                const response = await fetch(`${API_BASE}/volumes/${encodeURIComponent(volumeName)}/fix-chunks`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                log(`청크 수정 완료: ${result.fixed_chunks}개 변환`, 'success');
+                
+                if (result.errors.length > 0) {
+                    log(`오류 발생: ${result.errors.join(', ')}`, 'error');
+                }
+
+                // 볼륨 목록 새로고침
+                setTimeout(loadVolumes, 1000);
+
+            } catch (error) {
+                log(`청크 수정 실패: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = '청크 수정';
+            }
+        }
+
+        async function testVolume(volumeName) {
+            try {
+                log(`볼륨 "${volumeName}" 테스트 중...`);
+                
+                // info 파일 테스트
+                const infoUrl = `http://localhost:8000/precomp/${encodeURIComponent(volumeName)}/info`;
+                const infoResponse = await fetch(infoUrl);
+                
+                if (infoResponse.ok) {
+                    log(`✅ info 파일 접근 가능: ${infoUrl}`, 'success');
+                    
+                    // Neuroglancer URL 생성
+                    const neuroglancerUrl = `https://neuroglancer-demo.appspot.com/#!{'layers':{'image':{'type':'image','source':'precomputed://http://localhost:8000/precomp/${encodeURIComponent(volumeName)}'}}}`;
+                    
+                    log(`🚀 Neuroglancer URL: ${neuroglancerUrl}`);
+                    
+                    if (confirm('Neuroglancer에서 볼륨을 열어보시겠습니까?')) {
+                        window.open(neuroglancerUrl, '_blank');
+                    }
+                } else {
+                    log(`❌ info 파일 접근 실패: HTTP ${infoResponse.status}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`볼륨 테스트 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteVolume(volumeName) {
+            if (!confirm(`볼륨 "${volumeName}"을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
+                return;
+            }
+
+            try {
+                log(`볼륨 "${volumeName}" 삭제 중...`);
+                
+                const response = await fetch(`${API_BASE}/volumes/${encodeURIComponent(volumeName)}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                log(result.message, 'success');
+
+                // 볼륨 목록 새로고침
+                loadVolumes();
+
+            } catch (error) {
+                log(`볼륨 삭제 실패: ${error.message}`, 'error');
+            }
+        }
+
+        // 페이지 로드 시 초기화
+        window.onload = function() {
+            checkServerStatus();
+            loadVolumes();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+requests==2.31.0
+ipython==8.12.0
+
+# Converter dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+Pillow==10.0.1
+numpy==1.24.3
+psutil==5.9.8
+pyvips==2.2.1
+tifffile==2023.7.10

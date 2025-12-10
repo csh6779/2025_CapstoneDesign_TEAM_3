@@ -1,0 +1,33 @@
+{
+  "type": "image",
+  "data_type": "uint8",
+  "num_channels": 3,
+  "scales": [
+    {
+      "chunk_sizes": [
+        [
+          512,
+          512,
+          1
+        ]
+      ],
+      "encoding": "raw",
+      "key": "0",
+      "resolution": [
+        1,
+        1,
+        1
+      ],
+      "size": [
+        256,
+        257,
+        1
+      ],
+      "voxel_offset": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

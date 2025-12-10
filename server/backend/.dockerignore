@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 가상환경
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# 데이터 (appdata는 볼륨으로 마운트됨)
+appdata/
+*.tif
+*.tiff
+*.png
+*.jpg
+
+# Docker
+docker-compose*.yml
+.dockerignore
+
+# 로그
+*.log
+
+# 임시 파일
+temp/
+tmp/
+*.tmp
+
+# 백업 파일
+*_backup.py
+*_original.py
