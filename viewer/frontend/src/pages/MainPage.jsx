@@ -679,7 +679,7 @@ function MainPage() {
                         <i className="fas fa-bars"></i>
                     </button>
                     <h1 className="page-title">
-                        <Link to="/">ATI NEURO</Link>
+                        <Link to="/">HBI</Link>
                     </h1>
                     <div className="page-nav">
                         {user.LoginId === 'Guest' ? (
