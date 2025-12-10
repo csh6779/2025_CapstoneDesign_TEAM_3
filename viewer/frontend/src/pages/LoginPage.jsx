@@ -89,7 +89,7 @@ function LoginPage() {
         <div className="auth-page-wrapper">
             <header className="auth-header-simple">
                 <h1 className="page-title">
-                    <Link to="/">대용량 이미지 뷰어</Link>
+                    <Link to="/">HBI (How Big It Is?)</Link>
                 </h1>
             </header>
             <main className="auth-main-container">
