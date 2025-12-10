@@ -314,7 +314,7 @@ function Adminpage_static() {
         paddingBottom: '10px'
       }}>
         <div className="header-title">
-          <h1 style={{ margin: 0, fontSize: '24px' }}>ATI NEURO</h1>
+          <h1 style={{ margin: 0, fontSize: '24px' }}>HBI</h1>
           <span className="badge" style={{ backgroundColor: '#dc3545', color: '#fff', marginLeft: '10px' }}>Admin</span>
         </div>
 
